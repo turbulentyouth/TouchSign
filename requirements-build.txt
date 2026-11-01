@@ -1,0 +1,8 @@
+# TouchSign - PyInstaller 打包环境依赖
+# 仅用于构建 EXE，不进入最终运行依赖。
+# 必须使用干净的虚拟环境，且不要在该环境安装 requirements.txt 中的训练依赖。
+
+-r requirements-inference.txt
+
+# Windows EXE 打包
+pyinstaller>=6.10,<7

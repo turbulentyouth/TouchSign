@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="9" fill="#07130f"/>
+  <rect x="6" y="6" width="52" height="52" rx="3" fill="#9d3220"/>
+  <rect x="9" y="9" width="46" height="46" rx="2" fill="none" stroke="#efd7a1" stroke-opacity=".62"/>
+  <text x="32" y="44" text-anchor="middle" font-family="KaiTi,STKaiti,SimSun,serif" font-size="33" fill="#f7e3b8">触</text>
+</svg>

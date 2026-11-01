@@ -1,0 +1,29 @@
+# TouchSign - EXE / ONNX 推理环境依赖
+#
+# 这个文件用于最终打包和运行时环境，绝对不能安装或导入 torch / torchvision /
+# ultralytics；否则 PyInstaller 会把 PyTorch 相关 DLL 一并打进 EXE。
+#
+# 仅验证运行时：
+#   uv venv --python 3.12 --seed .venv-runtime
+#   uv pip install --python .venv-runtime\Scripts\python.exe -r requirements-inference.txt
+#
+# 构建 EXE：改用干净打包环境，在安装完本文件后再安装 PyInstaller，
+# 或直接安装 requirements-build.txt。
+
+# 数值计算与图像采集/预处理
+numpy>=1.26,<3
+opencv-python>=4.10,<5
+Pillow>=10,<13
+
+# 配置、GUI 与日志
+PyYAML>=6,<7
+nicegui>=2.0,<3
+pywebview>=5,<6
+
+# 默认使用 CPU 版 ONNX Runtime，EXE 不需要额外携带 CUDA/cuDNN。
+# 注意：onnxruntime 与 onnxruntime-gpu / onnxruntime-directml 不能同时安装。
+onnxruntime>=1.20,<2
+
+# 可选的 Windows GPU 方案（默认不启用）：
+# 1) 延迟不达标时，可改用 onnxruntime-directml，免装 CUDA，但需改打包流程并实测兼容性；
+# 2) 若改用 onnxruntime-gpu，还需随包携带匹配版本的 CUDA 12.x / cuDNN 9 DLL。

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>触象 · TouchSign | 视触觉生肖识别系统</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true">
+    <span class="ambient-orbit ambient-orbit--one"></span>
+    <span class="ambient-orbit ambient-orbit--two"></span>
+    <span class="ambient-character">象</span>
+    <span class="grain"></span>
+  </div>
+
+  <div class="page-frame" aria-hidden="true">
+    <i class="frame-corner frame-corner--tl"></i>
+    <i class="frame-corner frame-corner--tr"></i>
+    <i class="frame-corner frame-corner--bl"></i>
+    <i class="frame-corner frame-corner--br"></i>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-seal" aria-hidden="true">
+          <span>触象</span>
+          <i></i>
+        </div>
+        <div class="brand-copy">
+          <div class="brand-title">
+            <h1>触象</h1>
+            <span class="brand-english">TOUCHSIGN</span>
+          </div>
+          <p>视触觉生肖识别系统 <span class="micro-separator">/</span> TACTILE ZODIAC RECOGNITION</p>
+        </div>
+      </div>
+
+      <div class="system-center">
+        <span class="system-pulse" aria-hidden="true"><i></i></span>
+        <div class="system-copy">
+          <strong id="system-status">传感器在线</strong>
+          <small>SYSTEM READY</small>
+        </div>
+        <span class="vertical-rule" aria-hidden="true"></span>
+        <div class="system-time">
+          <strong id="clock">21:56:19</strong>
+          <small id="date">2026.10.30</small>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="sensor-control">
+          <span class="control-label">传感器 <em>/ SENSOR</em></span>
+          <div class="select-shell">
+            <svg class="sensor-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.25" y="5.25" width="17.5" height="13.5" rx="2.2"></rect>
+              <circle cx="12" cy="12" r="3.1"></circle>
+              <path d="M8 5.25 9.2 3h5.6l1.2 2.25"></path>
+            </svg>
+            <select id="sensor-select" aria-label="选择触觉传感器">
+              <option value="CAM-01" data-resolution="640 × 480">GelSight Mini · CAM-01</option>
+              <option value="CAM-02" data-resolution="640 × 480">GelSight Mini · CAM-02</option>
+              <option value="USB-03" data-resolution="1280 × 720">TouchLab Pro · USB-03</option>
+            </select>
+            <svg class="chevron" viewBox="0 0 12 8" aria-hidden="true">
+              <path d="M1 1.25 6 6.25l5-5"></path>
+            </svg>
+          </div>
+        </div>
+
+        <button class="icon-button" id="refresh-button" type="button" title="重新扫描设备" aria-label="重新扫描设备">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7"></path>
+            <path d="M20 4v7h-7"></path>
+          </svg>
+        </button>
+
+        <button class="connect-button" id="connect-button" type="button">
+          <span class="connect-dot" aria-hidden="true"></span>
+          <span id="connect-label">连接传感器</span>
+          <svg viewBox="0 0 18 18" aria-hidden="true">
+            <path d="M6.4 11.6 11.6 6.4"></path>
+            <path d="m4.5 9.5-1.2 1.2a3.1 3.1 0 0 0 4.4 4.4l1.8-1.8"></path>
+            <path d="m13.5 8.5 1.2-1.2a3.1 3.1 0 0 0-4.4-4.4l-1.8 1.8"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel sensor-panel" aria-labelledby="sensor-heading">
+        <span class="corner corner--tl" aria-hidden="true"></span>
+        <span class="corner corner--tr" aria-hidden="true"></span>
+        <span class="corner corner--bl" aria-hidden="true"></span>
+        <span class="corner corner--br" aria-hidden="true"></span>
+
+        <header class="panel-head">
+          <div class="panel-title">
+            <span class="chapter" aria-hidden="true">壹</span>
+            <div class="title-stack">
+              <span class="eyebrow">TACTILE VISION <i>/ 光学触觉</i></span>
+              <h2 id="sensor-heading">视触觉感知</h2>
+            </div>
+          </div>
+          <div class="panel-meta">
+            <span class="live-chip"><i></i> LIVE</span>
+            <span class="meta-mono" id="camera-meta">CAM 01 <b>/</b> 640 × 480</span>
+          </div>
+        </header>
+
+        <div class="sensor-stage">
+          <div class="sensor-view">
+            <img src="../../assets/demo/tactile-rat.png" alt="视触觉传感器采集到的生肖鼠浮雕图像">
+            <span class="feed-vignette" aria-hidden="true"></span>
+            <span class="scan-line" aria-hidden="true"></span>
+            <span class="feed-grain" aria-hidden="true"></span>
+
+            <div class="hud-corners" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </div>
+
+            <div class="feed-head">
+              <div class="feed-title">
+                <span class="tiny-index">01</span>
+                <span>接触面实时图像<small>CONTACT SURFACE</small></span>
+              </div>
+              <span class="feed-code">EXP 8.0 <i>ms</i> · GAIN 1.2×</span>
+            </div>
+
+            <div class="crosshair" aria-hidden="true">
+              <span class="crosshair-h"></span>
+              <span class="crosshair-v"></span>
+              <span class="crosshair-core"></span>
+              <span class="coordinate">X 0328.6&nbsp;&nbsp;Y 0412.9</span>
+            </div>
+
+            <div class="target-label" aria-hidden="true">
+              <span></span> CONTACT PATCH A
+            </div>
+
+            <div class="pressure-legend" aria-hidden="true">
+              <span>压 力</span>
+              <div class="pressure-scale"><i></i></div>
+              <small>MAX</small>
+              <small>MIN</small>
+            </div>
+
+            <div class="feed-readout">
+              <div class="readout-item">
+                <span>接触面积 <small>AREA</small></span>
+                <strong>42.6<em>%</em></strong>
+              </div>
+              <div class="readout-item">
+                <span>法向力 <small>FORCE</small></span>
+                <strong>1.24<em>N</em></strong>
+              </div>
+              <div class="readout-item">
+                <span>表面温度 <small>TEMP</small></span>
+                <strong>26.4<em>°C</em></strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="sensor-footer">
+          <div class="contact-state">
+            <span class="contact-glyph" aria-hidden="true">定</span>
+            <span class="contact-copy">
+              <strong>接触稳定</strong>
+              <small>CONTACT STABLE · 1.4s</small>
+            </span>
+          </div>
+
+          <div class="waveform" aria-label="接触力信号波形">
+            <span class="wave-caption">FORCE SIGNAL <i>· 60 Hz</i></span>
+            <svg viewBox="0 0 240 30" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="wave-stroke" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#4b9f8a" stop-opacity="0.25"></stop>
+                  <stop offset="0.45" stop-color="#78d5b6"></stop>
+                  <stop offset="1" stop-color="#d9bd82"></stop>
+                </linearGradient>
+                <linearGradient id="wave-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#78d5b6" stop-opacity="0.14"></stop>
+                  <stop offset="1" stop-color="#78d5b6" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+              <path class="wave-baseline" d="M0 23 H240"></path>
+              <path class="wave-area" d="M0 23 L10 22 18 20 26 21 34 17 42 19 52 14 60 16 68 8 74 13 82 10 90 18 100 15 110 17 120 6 126 12 136 9 144 16 154 13 162 19 172 15 182 17 192 8 200 13 210 15 220 12 230 18 240 16 L240 30 L0 30 Z"></path>
+              <path class="wave-line" d="M0 23 L10 22 18 20 26 21 34 17 42 19 52 14 60 16 68 8 74 13 82 10 90 18 100 15 110 17 120 6 126 12 136 9 144 16 154 13 162 19 172 15 182 17 192 8 200 13 210 15 220 12 230 18 240 16"></path>
+            </svg>
+          </div>
+
+          <div class="sensor-spec">
+            <span>GEL-01 <i>/</i> 0.1 mm</span>
+            <span class="spec-divider" aria-hidden="true"></span>
+            <span>采样 <b>60 Hz</b></span>
+          </div>
+        </footer>
+      </section>
+
+      <aside class="panel result-panel" aria-labelledby="result-heading">
+        <span class="corner corner--tl" aria-hidden="true"></span>
+        <span class="corner corner--tr" aria-hidden="true"></span>
+        <span class="corner corner--bl" aria-hidden="true"></span>
+        <span class="corner corner--br" aria-hidden="true"></span>
+
+        <header class="panel-head">
+          <div class="panel-title">
+            <span class="chapter" aria-hidden="true">贰</span>
+            <div class="title-stack">
+              <span class="eyebrow">IDENTIFICATION <i>/ 生肖辨识</i></span>
+              <h2 id="result-heading">辨识结果</h2>
+            </div>
+          </div>
+          <div class="panel-meta">
+            <span class="result-state"><i></i> 结果稳定</span>
+          </div>
+        </header>
+
+        <div class="result-body">
+          <div class="result-main">
+            <div class="oracle" aria-hidden="true">
+              <span class="oracle-aura"></span>
+              <span class="oracle-line oracle-line--v"></span>
+              <span class="oracle-line oracle-line--h"></span>
+              <span class="orbit orbit--outer"></span>
+              <span class="orbit orbit--dashed"></span>
+              <span class="orbit-ticks"></span>
+              <span class="oracle-caption oracle-caption--top" id="oracle-element">NORTH <i>·</i> 水</span>
+              <span class="oracle-caption oracle-caption--bottom" id="oracle-time">子时 <i>·</i> 01</span>
+              <span class="result-seal">
+                <span class="seal-inner">
+                  <strong id="result-glyph">鼠</strong>
+                  <small>生肖印</small>
+                </span>
+                <span class="seal-stamp" aria-hidden="true">识</span>
+              </span>
+            </div>
+
+            <div class="result-copy">
+              <span class="eyebrow result-eyebrow">ZODIAC NO. <b id="result-index">01</b> <i>/</i> <span id="result-branch">子</span></span>
+              <div class="name-line">
+                <h2 id="result-title">子鼠</h2>
+                <span class="match-chip"><i></i> MATCHED</span>
+              </div>
+              <p class="result-latin"><span id="result-pinyin">ZI</span> <i>·</i> <span id="result-english">RAT</span> <em>|</em> <span id="result-nature">属水 · 居北</span></p>
+              <p class="result-poem" id="result-poem">灵鼠衔金，机巧通灵</p>
+
+              <div class="confidence">
+                <div class="confidence-head">
+                  <span>识别置信度 <small>CONFIDENCE</small></span>
+                  <strong id="confidence-value">98.7<em>%</em></strong>
+                </div>
+                <div class="confidence-track" role="progressbar" aria-label="识别置信度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="98.7" id="confidence-bar">
+                  <span id="confidence-fill" style="width: 98.7%"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="engraved-divider" aria-hidden="true">
+            <span></span>
+            <i>◆</i>
+            <span></span>
+          </div>
+
+          <div class="result-stats">
+            <div class="stat">
+              <span>生肖序列 <small>SEQUENCE</small></span>
+              <strong><b id="sequence-current">01</b><em>/ 12</em></strong>
+            </div>
+            <div class="stat">
+              <span>接触稳定度 <small>STABILITY</small></span>
+              <strong>94.2<em>%</em></strong>
+            </div>
+            <div class="stat">
+              <span>推理耗时 <small>LATENCY</small></span>
+              <strong>18<em>ms</em></strong>
+            </div>
+          </div>
+
+          <section class="candidates" aria-labelledby="candidates-heading">
+            <div class="candidates-head">
+              <h3 id="candidates-heading">候选序列 <span>TOP MATCHES</span></h3>
+              <span class="candidate-threshold">拒识阈值 <b>85%</b></span>
+            </div>
+            <div class="candidate-list">
+              <div class="candidate-row is-leading">
+                <span class="candidate-rank">01</span>
+                <span class="candidate-name" id="candidate-name-1">鼠 <small>子鼠</small></span>
+                <span class="candidate-track"><i id="candidate-bar-1" style="width: 98.7%"></i></span>
+                <span class="candidate-value" id="candidate-value-1">98.7<em>%</em></span>
+              </div>
+              <div class="candidate-row">
+                <span class="candidate-rank">02</span>
+                <span class="candidate-name" id="candidate-name-2">牛 <small>丑牛</small></span>
+                <span class="candidate-track"><i id="candidate-bar-2" style="width: 0.8%"></i></span>
+                <span class="candidate-value" id="candidate-value-2">0.8<em>%</em></span>
+              </div>
+              <div class="candidate-row">
+                <span class="candidate-rank">03</span>
+                <span class="candidate-name" id="candidate-name-3">虎 <small>寅虎</small></span>
+                <span class="candidate-track"><i id="candidate-bar-3" style="width: 0.5%"></i></span>
+                <span class="candidate-value" id="candidate-value-3">0.5<em>%</em></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="recent" aria-labelledby="recent-heading">
+            <div class="recent-head">
+              <h3 id="recent-heading">最近识别 <span>RECENT LOG</span></h3>
+              <span class="recent-count"><i></i> 04</span>
+            </div>
+            <div class="log-list">
+              <div class="log-row">
+                <span class="log-time">21:52:08</span>
+                <span class="log-signet log-signet--dragon" aria-hidden="true">龙</span>
+                <span class="log-name">辰龙 <small>DRAGON</small></span>
+                <span class="log-confidence">97.4<em>%</em></span>
+                <svg class="log-check" viewBox="0 0 12 12" aria-hidden="true"><path d="m2.4 6.1 2.2 2.2 5-5"></path></svg>
+              </div>
+              <div class="log-row">
+                <span class="log-time">21:49:31</span>
+                <span class="log-signet log-signet--horse" aria-hidden="true">马</span>
+                <span class="log-name">午马 <small>HORSE</small></span>
+                <span class="log-confidence">96.8<em>%</em></span>
+                <svg class="log-check" viewBox="0 0 12 12" aria-hidden="true"><path d="m2.4 6.1 2.2 2.2 5-5"></path></svg>
+              </div>
+              <div class="log-row">
+                <span class="log-time">21:46:12</span>
+                <span class="log-signet" aria-hidden="true">兔</span>
+                <span class="log-name">卯兔 <small>RABBIT</small></span>
+                <span class="log-confidence">96.1<em>%</em></span>
+                <svg class="log-check" viewBox="0 0 12 12" aria-hidden="true"><path d="m2.4 6.1 2.2 2.2 5-5"></path></svg>
+              </div>
+              <div class="log-row">
+                <span class="log-time">21:41:56</span>
+                <span class="log-signet" aria-hidden="true">猴</span>
+                <span class="log-name">申猴 <small>MONKEY</small></span>
+                <span class="log-confidence">95.8<em>%</em></span>
+                <svg class="log-check" viewBox="0 0 12 12" aria-hidden="true"><path d="m2.4 6.1 2.2 2.2 5-5"></path></svg>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="result-footer">
+          <span class="record-seal" aria-hidden="true">录</span>
+          <span>结果已写入识别记录</span>
+          <span class="record-id">RECORD #A7F2</span>
+        </footer>
+      </aside>
+    </main>
+
+    <section class="zodiac-section" aria-labelledby="zodiac-heading">
+      <div class="zodiac-heading">
+        <span class="zodiac-seal" aria-hidden="true">十二</span>
+        <div class="title-stack">
+          <span class="eyebrow">ZODIAC MATRIX <i>/ 天干地支</i></span>
+          <h2 id="zodiac-heading">十二生肖</h2>
+        </div>
+        <span class="heading-rule" aria-hidden="true"></span>
+        <div class="zodiac-legend">
+          <span class="legend-active"><i></i> 感应高亮</span>
+          <span class="legend-muted">点击生肖可预览界面状态</span>
+        </div>
+      </div>
+
+      <div class="zodiac-row" id="zodiac-row">
+        <button class="zodiac-card is-active" type="button" data-zodiac="rat" aria-pressed="true" aria-label="预览生肖鼠的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">01</span><span class="zodiac-branch">子</span></span>
+          <span class="zodiac-char">鼠</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">子鼠</span><span class="zodiac-en">RAT</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="ox" aria-pressed="false" aria-label="预览生肖牛的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">02</span><span class="zodiac-branch">丑</span></span>
+          <span class="zodiac-char">牛</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">丑牛</span><span class="zodiac-en">OX</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="tiger" aria-pressed="false" aria-label="预览生肖虎的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">03</span><span class="zodiac-branch">寅</span></span>
+          <span class="zodiac-char">虎</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">寅虎</span><span class="zodiac-en">TIGER</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="rabbit" aria-pressed="false" aria-label="预览生肖兔的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">04</span><span class="zodiac-branch">卯</span></span>
+          <span class="zodiac-char">兔</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">卯兔</span><span class="zodiac-en">RABBIT</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="dragon" aria-pressed="false" aria-label="预览生肖龙的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">05</span><span class="zodiac-branch">辰</span></span>
+          <span class="zodiac-char">龙</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">辰龙</span><span class="zodiac-en">DRAGON</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="snake" aria-pressed="false" aria-label="预览生肖蛇的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">06</span><span class="zodiac-branch">巳</span></span>
+          <span class="zodiac-char">蛇</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">巳蛇</span><span class="zodiac-en">SNAKE</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="horse" aria-pressed="false" aria-label="预览生肖马的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">07</span><span class="zodiac-branch">午</span></span>
+          <span class="zodiac-char">马</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">午马</span><span class="zodiac-en">HORSE</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="goat" aria-pressed="false" aria-label="预览生肖羊的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">08</span><span class="zodiac-branch">未</span></span>
+          <span class="zodiac-char">羊</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">未羊</span><span class="zodiac-en">GOAT</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="monkey" aria-pressed="false" aria-label="预览生肖猴的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">09</span><span class="zodiac-branch">申</span></span>
+          <span class="zodiac-char">猴</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">申猴</span><span class="zodiac-en">MONKEY</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="rooster" aria-pressed="false" aria-label="预览生肖鸡的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">10</span><span class="zodiac-branch">酉</span></span>
+          <span class="zodiac-char">鸡</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">酉鸡</span><span class="zodiac-en">ROOSTER</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="dog" aria-pressed="false" aria-label="预览生肖狗的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">11</span><span class="zodiac-branch">戌</span></span>
+          <span class="zodiac-char">狗</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">戌狗</span><span class="zodiac-en">DOG</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+        <button class="zodiac-card" type="button" data-zodiac="pig" aria-pressed="false" aria-label="预览生肖猪的识别状态">
+          <span class="zodiac-top"><span class="zodiac-index">12</span><span class="zodiac-branch">亥</span></span>
+          <span class="zodiac-char">猪</span>
+          <span class="zodiac-foot"><span class="zodiac-cn">亥猪</span><span class="zodiac-en">PIG</span></span>
+          <span class="match-mark" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <span class="footer-brand">TOUCHSIGN <i>/</i> 触象</span>
+      <span class="footer-rule" aria-hidden="true"></span>
+      <span class="footer-motto">观象于触，识形于微</span>
+      <span class="footer-rule footer-rule--right" aria-hidden="true"></span>
+      <span class="footer-system">TACTILE INTELLIGENCE · UI PREVIEW</span>
+    </footer>
+  </div>
+
+  <script src="preview.js"></script>
+</body>
+</html>

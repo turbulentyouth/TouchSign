@@ -1,0 +1,8 @@
+# TouchSign / uv project configuration
+# PyPI packages: Aliyun mirror (China)
+find-links = ["https://mirrors.aliyun.com/pytorch-wheels/cu128/"]
+
+[[index]]
+name = "aliyun-pypi"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

@@ -1,0 +1,32 @@
+# TouchSign - 开发/训练环境依赖
+# 环境：Windows 10/11 x64 + Python 3.12 x64
+#
+# 本机显卡：NVIDIA GeForce RTX 5070 Ti (Blackwell)
+# 必须使用 CUDA 12.8 及以上的 PyTorch 轮子，旧的 cu124/cu126 版本不支持 sm_120。
+# 需要使用支持 CUDA 12.8 的新版 NVIDIA 驱动；当前驱动 591.86 满足要求。
+#
+# 训练环境已创建：.venv-train（Python 3.12.16，由 uv 管理）
+# 阿里云镜像已写入项目根目录 uv.toml：
+#   PyPI: https://mirrors.aliyun.com/pypi/simple/
+#   PyTorch cu128 wheels: https://mirrors.aliyun.com/pytorch-wheels/cu128/
+#
+# 安装依赖：
+#   uv pip install --python .venv-train\Scripts\python.exe -r requirements.txt
+#
+# 也可以先激活环境：
+#   .\.venv-train\Scripts\Activate.ps1
+#   uv pip install -r requirements.txt
+
+# 运行时依赖（GUI / 相机 / ONNX 推理）
+-r requirements-inference.txt
+
+# PyTorch GPU（训练与 ONNX 导出使用）
+# torch 2.7.1 + cu128 原生支持 Blackwell / RTX 50 系列
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+
+# YOLO 分类模型训练与导出
+ultralytics>=8.3.0,<8.4.0
+
+# ONNX 导出与导出后一致性校验
+onnx>=1.16,<2

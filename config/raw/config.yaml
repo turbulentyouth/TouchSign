@@ -1,0 +1,6 @@
+# Single-file distribution profile. Other settings use the application's defaults.
+app:
+  title: "触象 · TouchSign | 原图识别预览"
+recognition:
+  model_path: "models/raw/best.onnx"
+  preview: true
