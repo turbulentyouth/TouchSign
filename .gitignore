@@ -1,0 +1,32 @@
+# Python / uv
+.venv*/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local render, browser and scratch files
+.tmp/
+.spike/
+.cache/
+.vscode/
+Ultralytics/
+/yolo11n*.pt
+
+# Local third-party DLLs used by the SSL compatibility bridge
+runtime/openssl/
+
+# Locally collected sensor data, model artifacts and packaged binaries
+data/
+runs/
+build/
+dist/
+models/*.onnx
+models/*.pt
+models/*.json
+models/archive/
+logs/*.csv
+
+# OS files
+Thumbs.db
+Desktop.ini
