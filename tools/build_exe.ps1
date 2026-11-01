@@ -47,9 +47,14 @@ for entry in pkg_archive_contents(exe):
             or path.name.startswith(('cublas', 'cudnn', 'cufft', 'curand', 'cusolver', 'cusparse', 'nvrtc',
                                       'onnxruntime_providers_cuda', 'onnxruntime_providers_tensorrt'))):
         raise ValueError(f'Training or CUDA dependency in EXE: {entry}')
-print(f'Ready: {exe.resolve()} ({exe.stat().st_size / 1024**2:.1f} MiB)')
+print(f'Archive verified: {exe.resolve()} ({exe.stat().st_size / 1024**2:.1f} MiB)')
 '@
     if ($LASTEXITCODE -ne 0) { throw 'Single-file archive verification failed.' }
+    # Restricted build environments can mark outputs Low, preventing the
+    # one-file bootloader from extracting into the desktop user's TEMP folder.
+    & icacls.exe (Join-Path $projectRoot 'dist\TouchSign.exe') /setintegritylevel Medium
+    if ($LASTEXITCODE -ne 0) { throw 'Could not set the EXE integrity level to Medium.' }
+    Write-Output 'Ready: dist\TouchSign.exe'
 } finally {
     $env:PYINSTALLER_CONFIG_DIR = $previousBuildCache
     Pop-Location
