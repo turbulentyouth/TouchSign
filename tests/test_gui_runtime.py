@@ -82,6 +82,35 @@ class LiveViewTests(unittest.TestCase):
         self.assertEqual(self.view.result.result_state_text.text, '无接触')
         self.assertEqual(self.view.result.confidence.content, '—')
 
+    def test_cancelled_inference_during_shutdown_skips_rendering(self):
+        async def cancelled_io(*args, **kwargs):
+            return None
+
+        self.view.streaming = True
+        self.view._pending_reset = False
+        self.view._stream_serial = 1
+        frame = np.full((64, 64, 3), 100, dtype=np.uint8)
+        for fresh in (False, True):
+            with self.subTest(fresh=fresh), \
+                    patch('gui.app.run.io_bound', cancelled_io), \
+                    patch('gui.app.camera_manager') as cameras, \
+                    patch.object(self.view, '_render_state') as render_state, \
+                    patch.object(self.view, '_render_preview') as render_preview, \
+                    patch('gui.app.LOGGER.exception') as log_error:
+                cameras.frame_packet.return_value = (
+                    FramePacket(1, 1, time.monotonic(), frame) if fresh else None)
+                coroutine = self.view._tick()
+                try:
+                    with self.assertRaises(StopIteration):
+                        coroutine.send(None)
+                finally:
+                    coroutine.close()
+                render_state.assert_not_called()
+                render_preview.assert_not_called()
+                log_error.assert_not_called()
+                self.assertFalse(self.view.analyzing)
+                self.assertFalse(self.view.signal_lost)
+
     def test_reconnect_clears_result_and_accepts_new_stream_after_recalibration(self):
         async def immediate_io(function, *args, **kwargs):
             return function(*args, **kwargs)

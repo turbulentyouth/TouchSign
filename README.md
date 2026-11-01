@@ -6,11 +6,11 @@
 
 ## 原图识别单文件版
 
-构建产物为 `dist/TouchSign.exe`，内置 Python 运行环境、原图 ONNX 权重及配套清单。使用时只需复制这一个 EXE，无需安装 Python。双击后会自动打开系统浏览器中的本机界面，默认地址为 `http://127.0.0.1:8080`。首次启动需要等待内置文件解压。
+构建产物为 `dist/TouchSign.exe`，内置 Python 运行环境、原图 ONNX 权重及配套清单。使用时只需复制这一个 EXE，无需安装 Python。双击后打开独立的 Native 窗口，使用 Windows WebView2 显示界面。首次启动需要等待内置文件解压。
 
-2026-11-01 本机构建大小为 111.1 MiB。已通过 60 项自动测试，以及单个 EXE 在独立中文路径目录的启动、静态资源和内置模型检查。打包验收关闭了真实相机，使用已有生肖、未知物体、空载图像回放核对模型输出，现场传感器识别效果需实物测试。
+2026-11-01 本机构建大小为 111.1 MiB。已通过 61 项自动测试，验证了 Native 窗口启动、模型加载、相机连接及关闭退出。单文件归档内的权重与原始导出逐字节核对一致，已有生肖、未知物体、空载图像回放结果正确。现场传感器识别效果仍需实物测试。
 
-连接传感器，确认表面空载，点击「空载校准」，校准完成后压稳生肖牌子。默认显示原始画面。关闭 TouchSign 控制台窗口即可退出程序并释放相机。
+连接传感器，确认表面空载，点击「空载校准」，校准完成后压稳生肖牌子。默认显示原始画面。关闭 TouchSign 窗口即可退出程序并释放相机。
 
 本版内置 `models/raw/best.onnx`，来自 `raw_20261031_155549_285715` 训练批次，输入格式为 `raw_bgr_v1`。保留了原始的 `unvalidated` 状态，界面采用「模型预览」，直接显示首选类别并跳过拒识阈值。该批次验证集缺少空载样本，使用原有拒识阈值时生肖正确接受率为 62.9%。仍需补采独立数据以验证正式识别表现。
 
@@ -158,7 +158,7 @@ uv pip install --python .venv-runtime\Scripts\python.exe -r requirements-build.t
 
 构建脚本检查干净的 CPU 推理环境，验证原图模型及其清单，并将它们内嵌到 `dist/TouchSign.exe`。默认使用 `config/raw/config.yaml` 启动配置。构建结束后逐字节核对归档内的权重和配置，并检查训练依赖是否被排除。
 
-原图双输出 ONNX 约 5.93 MiB。完整 EXE 还包含 Python、OpenCV、ONNX Runtime、NiceGUI 和窗口依赖，脚本会打印实际大小。启动时自动将内部依赖解压到临时目录，缓存和日志写入 `%LOCALAPPDATA%/TouchSign`。主识别界面默认使用系统浏览器，可选的 `--native` 模式使用 WebView2。
+原图双输出 ONNX 约 5.93 MiB。完整 EXE 还包含 Python、OpenCV、ONNX Runtime、NiceGUI 和窗口依赖，脚本会打印实际大小。启动时自动将内部依赖解压到临时目录，缓存和日志写入 `%LOCALAPPDATA%/TouchSign`。EXE 默认以 Native 模式启动，目标机需要 Windows WebView2 Runtime。
 
 需要复现本机依赖版本时，可用 `requirements-runtime-lock.txt` 替代 `requirements-build.txt` 安装。旧版目录构建的验收记录保存在开发验证文档中。
 

@@ -155,7 +155,7 @@ class TouchSignView:
                     return
                 state = await run.io_bound(self.engine.process, None,
                                           sequence=0, timestamp=None, stream_id=self._stream_serial)
-                if generation == self._generation:
+                if state is not None and generation == self._generation:
                     self._render_state(state)
                     self.sensor.show_placeholder('无实时信号，识别已停止')
                     self.signal_lost = True
@@ -167,7 +167,7 @@ class TouchSignView:
             state = await run.io_bound(self.engine.process, packet.frame,
                                       sequence=packet.sequence, timestamp=packet.timestamp,
                                       stream_id=packet.serial)
-            if generation != self._generation or self.calibrating:
+            if state is None or generation != self._generation or self.calibrating:
                 return
             self.signal_lost = False
             statistics = camera_manager.statistics()
@@ -491,7 +491,9 @@ def run_app(config: Config, *, host: str | None = None, port: int | None = None,
     register_pages(config)
     favicon = config.favicon_path
     use_native = config.app.native if native is None else native
-    ui.run(host=host or config.app.host, port=port or config.app.port, title=config.app.title,
+    # Native windows use an available local port unless the caller supplies one.
+    run_port = port if port is not None else (None if use_native else config.app.port)
+    ui.run(host=host or config.app.host, port=run_port, title=config.app.title,
            favicon=str(favicon) if favicon and favicon.is_file() else None, dark=True,
            show=config.app.show if show is None else show,
            reload=config.app.reload if reload is None else reload, native=use_native,

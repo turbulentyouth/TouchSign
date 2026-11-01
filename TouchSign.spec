@@ -27,4 +27,4 @@ a = Analysis([str(root/'main.py')], pathex=[str(root)],
     noarchive=False)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], name='TouchSign',
-          debug=False, strip=False, upx=False, console=True)
+          debug=False, strip=False, upx=False, console=False)

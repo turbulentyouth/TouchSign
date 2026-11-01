@@ -10,18 +10,15 @@ import argparse
 from dataclasses import replace
 import logging
 import multiprocessing
-
-from gui.runtime import prepare_runtime
-
-try:
-    prepare_runtime()
-except RuntimeError as exc:
-    raise SystemExit(f'[TouchSign] 启动失败：{exc}') from None
-
-from core.config import DEFAULT_CONFIG_PATH, load_config  # noqa: E402
+import os
+from pathlib import Path
+import sys
+import traceback
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    from core.config import DEFAULT_CONFIG_PATH
+
     parser = argparse.ArgumentParser(
         prog='TouchSign',
         description='触象 · 视触觉生肖识别系统',
@@ -39,7 +36,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         '--no-show',
         action='store_true',
-        help='启动后不自动打开浏览器',
+        help='仅启动后台服务，不显示窗口或打开浏览器',
     )
     parser.add_argument(
         '--native',
@@ -66,6 +63,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from core.config import load_config
+
     args = _parse_args(argv)
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -92,10 +91,54 @@ def main(argv: list[str] | None = None) -> None:
         port=args.port,
         show=False if args.no_show else None,
         reload=True if args.reload else None,
-        native=True if args.native else None,
+        native=(args.native or config.app.native) and not args.no_show,
     )
 
 
+def _launch() -> None:
+    frozen = bool(getattr(sys, 'frozen', False))
+    log_path = None
+    try:
+        if frozen:
+            candidate_log = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'TouchSign' / 'logs' / 'startup.log'
+            candidate_log.parent.mkdir(parents=True, exist_ok=True)
+            # Windowed EXEs have no stdout/stderr. Uvicorn and spawned native
+            # windows need real streams for logging and startup diagnostics.
+            output = candidate_log.open('a', encoding='utf-8', buffering=1)
+            log_path = candidate_log
+            sys.stdout = output
+            sys.stderr = output
+        from gui.runtime import prepare_runtime
+
+        prepare_runtime()
+        multiprocessing.freeze_support()
+        main()
+    except KeyboardInterrupt:
+        pass
+    except (Exception, SystemExit) as exc:
+        if isinstance(exc, SystemExit) and not exc.code:
+            return
+        if not frozen:
+            raise
+        detail = traceback.format_exc()
+        if sys.stderr is not None:
+            try:
+                sys.stderr.write(detail)
+                sys.stderr.flush()
+            except OSError:
+                pass
+        import ctypes
+
+        message = f'TouchSign 启动失败\n\n{exc}'
+        if log_path is not None:
+            message += f'\n\n诊断日志\n{log_path}'
+        ctypes.windll.user32.MessageBoxW(None, message, 'TouchSign', 0x10)
+        raise SystemExit(1) from None
+
+
 if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    main()
+    _launch()
+elif __name__ == '__mp_main__':
+    from gui.runtime import prepare_runtime
+
+    prepare_runtime()
