@@ -109,7 +109,9 @@ print(f'Archive verified: {exe.resolve()} ({exe.stat().st_size / 1024**2:.1f} Mi
     if ($LASTEXITCODE -ne 0) { throw 'Single-file archive verification failed.' }
     # The one-file bootloader extracts into per-user LocalLow/TouchSign.
     # Do not depend on changing an inherited integrity label during packaging.
-    Write-Output 'Ready: dist\TouchSign.exe'
+    & $Python tools/package_release.py
+    if ($LASTEXITCODE -ne 0) { throw 'Single-EXE ZIP verification failed.' }
+    Write-Output 'Release: dist\TouchSign-NERO-SingleFile.zip (extract using Explorer into a normal user directory)'
 } finally {
     $env:PYINSTALLER_CONFIG_DIR = $previousBuildCache
     Pop-Location
