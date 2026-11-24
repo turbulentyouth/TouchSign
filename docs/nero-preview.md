@@ -1,5 +1,11 @@
 # NERO 单轮触觉检测预览版
 
+## 临时目录错误的修复包
+
+若双击单文件版出现 `Could not create temporary directory`，使用 `dist/TouchSign-NERO-Folder.zip`。请在资源管理器中“全部解压”到自己的普通目录，再运行解压后文件夹内的 `TouchSign.exe`，保留旁边完整的 `_internal` 目录。不要在压缩包内直接运行，也不要只拷贝 EXE。
+
+文件夹版无需启动时解压到临时目录。ZIP 不携带构建目录的 NTFS 完整性标签，用户自行解压后文件会继承目标目录权限。构建命令：`.venv-runtime\Scripts\python.exe -m PyInstaller --noconfirm TouchSign-folder.spec`（如当前环境需要 OpenSSL 兼容初始化，仍使用 `gui.runtime.prepare_runtime()` 后调用 PyInstaller）。
+
 本分支为 `feature/nero-teach-detect`，未连接机械臂和触觉传感器进行实测。
 
 ## 流程
