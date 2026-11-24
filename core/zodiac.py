@@ -44,18 +44,18 @@ class Zodiac:
 
 
 ZODIAC: tuple[Zodiac, ...] = (
-    Zodiac('rat', '鼠', '子鼠', 'ZI', 'RAT', '子', 1, '水', '北', 'NORTH', '子时', '灵鼠衔金，机巧通灵', 98.7),
-    Zodiac('ox', '牛', '丑牛', 'CHOU', 'OX', '丑', 2, '土', '东北', 'NORTHEAST', '丑时', '厚德载物，耕耘有时', 97.9),
-    Zodiac('tiger', '虎', '寅虎', 'YIN', 'TIGER', '寅', 3, '木', '东北', 'NORTHEAST', '寅时', '风从虎啸，威镇山林', 98.1),
-    Zodiac('rabbit', '兔', '卯兔', 'MAO', 'RABBIT', '卯', 4, '木', '东', 'EAST', '卯时', '月华凝露，静中藏慧', 97.6),
-    Zodiac('dragon', '龙', '辰龙', 'CHEN', 'DRAGON', '辰', 5, '土', '东南', 'SOUTHEAST', '辰时', '云起龙骧，万象更新', 96.8),
-    Zodiac('snake', '蛇', '巳蛇', 'SI', 'SNAKE', '巳', 6, '火', '东南', 'SOUTHEAST', '巳时', '灵蛇盘玉，幽微见真', 96.4),
-    Zodiac('horse', '马', '午马', 'WU', 'HORSE', '午', 7, '火', '南', 'SOUTH', '午时', '天马行空，一往无前', 97.2),
-    Zodiac('goat', '羊', '未羊', 'WEI', 'GOAT', '未', 8, '土', '西南', 'SOUTHWEST', '未时', '温润如玉，和合生祥', 95.9),
-    Zodiac('monkey', '猴', '申猴', 'SHEN', 'MONKEY', '申', 9, '金', '西南', 'SOUTHWEST', '申时', '灵猴献瑞，机变无穷', 96.7),
-    Zodiac('rooster', '鸡', '酉鸡', 'YOU', 'ROOSTER', '酉', 10, '金', '西', 'WEST', '酉时', '金鸡报晓，光启东方', 97.1),
-    Zodiac('dog', '狗', '戌狗', 'XU', 'DOG', '戌', 11, '土', '西北', 'NORTHWEST', '戌时', '忠守其门，信义相随', 96.3),
-    Zodiac('pig', '猪', '亥猪', 'HAI', 'PIG', '亥', 12, '水', '西北', 'NORTHWEST', '亥时', '亥水生财，丰饶安泰', 95.7),
+    Zodiac('rat', '鼠', '子鼠', 'ZI', 'RAT', '子', 1, '水', '北', 'NORTH', '子时', '嘿嘿，小不点大智慧！', 98.7),
+    Zodiac('ox', '牛', '丑牛', 'CHOU', 'OX', '丑', 2, '土', '东北', 'NORTHEAST', '丑时', '俺老牛踏地有声！', 97.9),
+    Zodiac('tiger', '虎', '寅虎', 'YIN', 'TIGER', '寅', 3, '木', '东北', 'NORTHEAST', '寅时', '虎啸山林，威震八方', 98.1),
+    Zodiac('rabbit', '兔', '卯兔', 'MAO', 'RABBIT', '卯', 4, '木', '东', 'EAST', '卯时', '月宫仙兔下凡来，温温柔柔带福气。', 97.6),
+    Zodiac('dragon', '龙', '辰龙', 'CHEN', 'DRAGON', '辰', 5, '土', '东南', 'SOUTHEAST', '辰时', '龙腾九天，呼风唤雨', 96.8),
+    Zodiac('snake', '蛇', '巳蛇', 'SI', 'SNAKE', '巳', 6, '火', '东南', 'SOUTHEAST', '巳时', '灵蛇曲伸，刚柔并济', 96.4),
+    Zodiac('horse', '马', '午马', 'WU', 'HORSE', '午', 7, '火', '南', 'SOUTH', '午时', '蹄踏青云，日行千里', 97.2),
+    Zodiac('goat', '羊', '未羊', 'WEI', 'GOAT', '未', 8, '土', '西南', 'SOUTHWEST', '未时', '三阳开泰，和和美美', 95.9),
+    Zodiac('monkey', '猴', '申猴', 'SHEN', 'MONKEY', '申', 9, '金', '西南', 'SOUTHWEST', '申时', '俺老孙来也！', 96.7),
+    Zodiac('rooster', '鸡', '酉鸡', 'YOU', 'ROOSTER', '酉', 10, '金', '西', 'WEST', '酉时', '雄鸡一唱天下白！', 97.1),
+    Zodiac('dog', '狗', '戌狗', 'XU', 'DOG', '戌', 11, '土', '西北', 'NORTHWEST', '戌时', '忠义当先，守护左右', 96.3),
+    Zodiac('pig', '猪', '亥猪', 'HAI', 'PIG', '亥', 12, '水', '西北', 'NORTHWEST', '亥时', '嘿嘿，俺老猪拱门送福啦！', 95.7),
 )
 
 ZODIAC_BY_KEY: dict[str, Zodiac] = {item.key: item for item in ZODIAC}

@@ -1,0 +1,50 @@
+{
+  "rat": {
+    "text": "鼠。嘿嘿，小不点大智慧！鼠年机灵转，好事快一步，愿你眼明手快，处处抢先机！",
+    "source": "WAIC/assets/zodiac/audio/00_rat.wav"
+  },
+  "ox": {
+    "text": "牛。俺老牛踏地有声！脚踏实地，力拔山兮，祝你牛劲十足，事业稳如泰山，一冲到底！",
+    "source": "WAIC/assets/zodiac/audio/01_ox.wav"
+  },
+  "tiger": {
+    "text": "虎。虎啸山林，威震八方！借你一双虎翼，气势吞云，愿你虎胆雄心，宏图大展，无人能挡！",
+    "source": "WAIC/assets/zodiac/audio/02_tiger.wav"
+  },
+  "rabbit": {
+    "text": "兔。月宫仙兔下凡来，温温柔柔带福气。愿你前程似锦，步步生花，好运缠着你跑不掉～",
+    "source": "WAIC/assets/zodiac/audio/03_rabbit.wav"
+  },
+  "dragon": {
+    "text": "龙。龙腾九天，呼风唤雨！本王赐你祥云瑞气，愿你志存高远，万里鹏程，心想事成，风生水起！",
+    "source": "WAIC/assets/zodiac/audio/04_dragon.wav"
+  },
+  "snake": {
+    "text": "蛇。灵蛇曲伸，刚柔并济。愿你心窍玲珑，处事圆融，左右逢源，千丝万缕皆顺意。",
+    "source": "WAIC/assets/zodiac/audio/05_snake.wav"
+  },
+  "horse": {
+    "text": "马。蹄踏青云，日行千里！愿君策马扬鞭，征程如飞，马到功成，前程一马平川！",
+    "source": "WAIC/assets/zodiac/audio/06_horse.wav"
+  },
+  "goat": {
+    "text": "羊。三阳开泰，和和美美！愿你喜气洋洋，身体倍儿棒，生活甜得像青草蛋糕！",
+    "source": "WAIC/assets/zodiac/audio/07_goat.wav"
+  },
+  "monkey": {
+    "text": "猴。俺老孙来也！火眼金睛看透机遇，如意金箍棒扫平障碍，祝你聪明盖世，福运齐天，直上云霄！",
+    "source": "WAIC/assets/zodiac/audio/08_monkey.wav"
+  },
+  "rooster": {
+    "text": "鸡。雄鸡一唱天下白！清晨报晓，朝气满堂，愿你闻鸡起舞，日日精进，前程金光万丈！",
+    "source": "WAIC/assets/zodiac/audio/09_rooster.wav"
+  },
+  "dog": {
+    "text": "狗。忠义当先，守护左右。愿你平安无虞，好运常随，坏事近不了身，福气叼着就来！",
+    "source": "WAIC/assets/zodiac/audio/10_dog.wav"
+  },
+  "pig": {
+    "text": "猪。嘿嘿，俺老猪拱门送福啦！圆圆满满，吃嘛嘛香，祝你福气像俺的肚子，满满当当，诸事顺心！",
+    "source": "WAIC/assets/zodiac/audio/11_pig.wav"
+  }
+}

@@ -2,6 +2,8 @@
 
 import unittest
 import time
+from dataclasses import replace
+import wave
 from unittest.mock import patch
 
 import numpy as np
@@ -15,7 +17,8 @@ from core.camera import FramePacket
 from core.contact import ContactResult
 from core.inference import ModelPrediction
 from core.state_machine import RecognitionState
-from gui.app import TouchSignView
+from gui.app import ASSETS_DIR, TouchSignView
+from core.zodiac import ZODIAC_KEYS, ZODIAC_BY_KEY
 
 
 class LiveViewTests(unittest.TestCase):
@@ -38,6 +41,68 @@ class LiveViewTests(unittest.TestCase):
         self.assertEqual(self.view.result.title.text, '未识别')
         self.assertTrue(self.view.difference_preview)
         self.assertEqual(self.view.sensor.live_text.text, 'NO INPUT')
+
+    def test_speech_drops_changing_candidates_and_waits_for_release(self):
+        rat = replace(self.accepted_state(), status='preview', new_record=False)
+        tiger = replace(rat, prediction=replace(rat.prediction, key='tiger', predicted_key='tiger'))
+        released = RecognitionState('no_contact', '未接触')
+        samples = [(0, rat), (.4, tiger), (.8, rat), (1.2, rat), (1.61, rat),
+                   (1.7, released), (1.9, released), (2, tiger), (2.4, tiger),
+                   (2.8, tiger), (3, released), (3.3, released), (3.51, released),
+                   (3.6, rat), (4, rat), (4.41, rat)]
+        with patch('gui.app.ui.run_javascript') as play:
+            for timestamp, state in samples:
+                self.view._announce(state, timestamp)
+                self.assertEqual(play.call_count, int(timestamp >= 1.61) + int(timestamp >= 4.41))
+            self.assertTrue(all('/rat.wav' in call.args[0] for call in play.call_args_list))
+
+    def test_new_stable_class_can_interrupt_without_release(self):
+        from gui.speech import SpeechGate
+        gate = SpeechGate(0.5)
+        rat = self.accepted_state()
+        self.assertEqual(gate.update(rat, 0), 'rat')
+        tiger = replace(rat, status='preview', new_record=False,
+                        prediction=replace(rat.prediction, key='tiger', predicted_key='tiger'))
+        self.assertIsNone(gate.update(tiger, .1))
+        self.assertIsNone(gate.update(tiger, .5))
+        self.assertEqual(gate.update(tiger, .95), 'tiger')
+        self.assertIsNone(gate.update(tiger, 1.1))
+
+    def test_speech_skips_missing_frames_and_honors_mute(self):
+        state = self.accepted_state()
+        preview = replace(state, status='preview', new_record=False)
+        with patch('gui.app.ui.run_javascript') as play:
+            for timestamp in (0, .3, 1.5, 1.5, 1.9):
+                self.view._announce(preview, timestamp)
+            play.assert_not_called()
+            self.view._announce(state, 2)
+            self.view._announce(replace(state, new_record=False), 2.1)
+            play.assert_called_once()
+            self.view._toggle_speech()
+            play.reset_mock()
+            self.view._announce(state, 3)
+            play.assert_not_called()
+
+    def test_speech_test_updates_panel_without_creating_recognition(self):
+        from types import SimpleNamespace
+        for key in ZODIAC_KEYS:
+            self.view._speech_test_changed(SimpleNamespace(args={'detail': key}))
+            self.assertTrue(self.view.speech_testing)
+            self.assertEqual(self.view.result.result_state_text.text, '语音试听')
+            self.assertEqual(self.view.result.confidence.content, '—')
+            self.assertEqual(self.view.result.title.text, ZODIAC_BY_KEY[key].title)
+            self.view._render_state(self.accepted_state())
+            self.assertEqual(self.view.records, [])
+            self.assertEqual(self.view.result.result_state_text.text, '语音试听')
+        self.view._speech_test_changed(SimpleNamespace(args={'detail': None}))
+        self.assertFalse(self.view.speech_testing)
+        self.assertEqual(self.view.result.title.text, '未识别')
+
+    def test_every_zodiac_has_a_playable_clip(self):
+        for key in ZODIAC_KEYS:
+            with self.subTest(key=key), wave.open(str(ASSETS_DIR / 'speech' / f'{key}.wav')) as clip:
+                self.assertGreater(clip.getnframes(), 0)
+                self.assertGreater(len(set(clip.readframes(clip.getnframes()))), 1)
 
     def test_rejections_clear_previous_result_and_matrix(self):
         for status in ('unknown', 'no_contact', 'model_missing', 'no_signal', 'uncalibrated', 'error'):

@@ -10,6 +10,24 @@ try {
     }
     & $Python -c @'
 from importlib import metadata, util
+from pathlib import Path
+import json
+import os
+import wave
+from core.zodiac import ZODIAC_KEYS
+
+assets_root = Path(os.environ.get('TOUCHSIGN_ASSETS_DIR', 'assets'))
+manifest = json.loads((assets_root / 'speech/manifest.json').read_text(encoding='utf-8'))
+if set(manifest) != set(ZODIAC_KEYS):
+    raise ValueError('Speech manifest must contain all twelve zodiac entries')
+if not (assets_root / 'speech-test.js').is_file():
+    raise FileNotFoundError('Missing assets/speech-test.js')
+for key in ZODIAC_KEYS:
+    with wave.open(str(assets_root / 'speech' / f'{key}.wav'), 'rb') as audio:
+        if audio.getnframes() == 0:
+            raise ValueError(f'Empty speech file: {key}')
+print('All twelve speech recordings and playback assets verified')
+
 bad = [name for name in ('torch', 'torchvision', 'torchaudio', 'ultralytics') if util.find_spec(name)]
 bad += [dist.metadata['Name'] for dist in metadata.distributions()
         if dist.metadata['Name'].lower().startswith(('onnxruntime-gpu', 'nvidia-'))]
@@ -33,6 +51,7 @@ print('Raw ONNX, manifest and CPU inference session verified')
 
     & $Python -c @'
 from pathlib import Path
+import os
 from PyInstaller.archive.readers import CArchiveReader, pkg_archive_contents
 exe = Path('dist/TouchSign.exe')
 archive = CArchiveReader(exe)
@@ -41,6 +60,11 @@ for path in (Path('models/raw/best.onnx'), Path('models/raw/best.json')):
         raise ValueError(f'Incorrect embedded model file {path}')
 if archive.extract(str(Path('config/config.yaml'))) != Path('config/raw/config.yaml').read_bytes():
     raise ValueError('Incorrect embedded startup profile')
+assets_root = Path(os.environ.get('TOUCHSIGN_ASSETS_DIR', 'assets'))
+for path in (assets_root / 'speech').glob('*'):
+    embedded = Path('assets/speech') / path.name
+    if path.is_file() and archive.extract(str(embedded)) != path.read_bytes():
+        raise ValueError(f'Incorrect embedded speech file {path}')
 for entry in pkg_archive_contents(exe):
     path = Path(entry.lower())
     if (path.parts[0].split('.')[0] in {'torch', 'torchvision', 'torchaudio', 'ultralytics', 'training', 'onnx', 'nvidia'}

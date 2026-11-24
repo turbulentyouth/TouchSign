@@ -25,6 +25,13 @@ models/*.onnx
 models/*.pt
 models/*.json
 models/archive/
+# Release model weights and offline speech are required on fresh clones.
+!models/raw/best.onnx
+!models/raw/best.pt
+!models/raw/best.json
+!assets/speech/
+!assets/speech/*.wav
+!assets/speech/manifest.json
 logs/*.csv
 
 # OS files

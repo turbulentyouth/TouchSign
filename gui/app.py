@@ -20,9 +20,10 @@ from core.config import Config
 from core.contact import make_difference
 from core.inference import RAW_INPUT_KIND
 from core.state_machine import RecognitionEngine
-from core.zodiac import ZODIAC_BY_KEY
+from core.zodiac import ZODIAC_BY_KEY, ZODIAC_KEYS
 from gui.components import AppFooter, ResultPanel, SensorPanel, TopBar, ZodiacMatrix
 from gui.dom import Text, element
+from gui.speech import SpeechGate
 from gui.theme import apply_theme
 from gui.view_models import Candidate, ContactReading, Prediction, RecognitionRecord
 
@@ -48,6 +49,9 @@ class TouchSignView:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.engine = RecognitionEngine(config)
+        self.speech = SpeechGate(config.recognition.max_frame_age)
+        self.speech_enabled = True
+        self.speech_testing = False
         self.connected = True
         self.scanning = False
         self.calibrating = False
@@ -107,6 +111,22 @@ class TouchSignView:
             with self.preview_button:
                 self.preview_text = Text('span', self._preview_label)
             self.preview_button.on('click', self._toggle_preview)
+            self.audio = element('audio')
+            self.audio.on('speech-test', self._speech_test_changed, args=['detail'])
+            self.speech_button = element('button', 'runtime-button').props('type="button" aria-pressed="true"')
+            with self.speech_button:
+                self.speech_label = Text('span', '语音播报 · 开')
+            self.speech_button.on('click', self._toggle_speech)
+            ui.add_head_html('<script src="/assets/speech-test.js"></script>')
+            test_button = element('button', 'runtime-button').props(
+                'type="button" title="按生肖顺序试听十二段完整播报，再次点击可停止"')
+            with test_button:
+                Text('span', '测试声音')
+            playlist = [(key, ZODIAC_BY_KEY[key].glyph) for key in ZODIAC_KEYS]
+            test_button.on('click', js_handler=(
+                f'(event) => toggleSpeechTest(event.currentTarget, getHtmlElement({self.audio.id}), '
+                f'{json.dumps(playlist, ensure_ascii=False)})'
+            ))
             self.reload_button = element('button', 'runtime-button').props('type="button"')
             with self.reload_button:
                 Text('span', '重新加载模型')
@@ -122,13 +142,40 @@ class TouchSignView:
         self.model_status.text = self.engine.model_status
         self.model_status.props('title=' + json.dumps(str(self.engine.model_path), ensure_ascii=False))
 
+    def _toggle_speech(self) -> None:
+        self.speech_enabled = not self.speech_enabled
+        self.speech_label.text = '语音播报 · 开' if self.speech_enabled else '语音播报 · 关'
+        self.speech_button.props(f'aria-pressed="{str(self.speech_enabled).lower()}"')
+        self.speech.reset()
+        if not self.speech_enabled:
+            ui.run_javascript(f'stopRecognitionSpeech(getHtmlElement({self.audio.id}))')
+
+    def _announce(self, state, timestamp: float) -> None:
+        if not self.speech_enabled or self.speech_testing:
+            return
+        key = self.speech.update(state, timestamp)
+        if key is not None:
+            source = json.dumps(f'/assets/speech/{key}.wav')
+            ui.run_javascript(f'queueRecognitionSpeech(getHtmlElement({self.audio.id}), {source})')
+
+    def _speech_test_changed(self, event) -> None:
+        key = event.args.get('detail')
+        self.speech_testing = key in ZODIAC_BY_KEY if isinstance(key, str) else False
+        self.speech.reset()
+        if self.speech_testing:
+            self.result.render_speech_test(ZODIAC_BY_KEY[key])
+            self.matrix.set_active(key)
+        else:
+            self._clear_result('试听结束，等待实时识别', '待识别')
+
     async def _tick(self) -> None:
-        if self.analyzing or self.calibrating or self.scanning or self.loading_model:
+        if self.speech_testing or self.analyzing or self.calibrating or self.scanning or self.loading_model:
             return
         self.analyzing = True
         generation = self._generation
         try:
             if self._pending_reset:
+                self.speech.reset()
                 await run.io_bound(self.engine.reset, clear_calibration=True)
                 if generation != self._generation:
                     return
@@ -156,6 +203,7 @@ class TouchSignView:
                 state = await run.io_bound(self.engine.process, None,
                                           sequence=0, timestamp=None, stream_id=self._stream_serial)
                 if state is not None and generation == self._generation:
+                    self.speech.reset()
                     self._render_state(state)
                     self.sensor.show_placeholder('无实时信号，识别已停止')
                     self.signal_lost = True
@@ -175,6 +223,7 @@ class TouchSignView:
                 self.sensor.set_feed_rate(statistics[0])
             self._render_preview(packet.frame)
             self._render_state(state)
+            self._announce(state, packet.timestamp)
         except Exception as exc:
             LOGGER.exception('实时识别失败')
             self._clear_result(f'识别已停止：{exc}', '识别异常')
@@ -204,6 +253,8 @@ class TouchSignView:
             self.sensor._set_note('与空载基线的绝对差分')
 
     def _render_state(self, state) -> None:
+        if self.speech_testing:
+            return
         contact = state.contact
         self._waveform.append(float(contact.score))
         self.contact = ContactReading(
@@ -254,6 +305,8 @@ class TouchSignView:
             self.result.render_records(self.records)
 
     def _clear_result(self, message: str, status: str = '未识别') -> None:
+        if self.speech_testing:
+            return
         self.current = None
         self.result.render_unknown(message)
         self.result.result_state_text.text = status
@@ -266,6 +319,7 @@ class TouchSignView:
             ui.notify('请先连接传感器', type='warning')
             return
         self.calibrating = True
+        self.speech.reset()
         self._generation += 1
         generation = self._generation
         self._clear_result('正在采集空载基线，请保持表面无物体', '校准中')
@@ -352,6 +406,7 @@ class TouchSignView:
             ui.notify('请等待当前操作完成', type='warning')
             return False
         self.loading_model = True
+        self.speech.reset()
         self._generation += 1
         self._clear_result('正在加载 ONNX 模型', '模型加载中')
         self.reload_button.props('disabled')

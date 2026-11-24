@@ -1807,7 +1807,9 @@ a {
   font-size: 11.5px;
   letter-spacing: 0.1em;
   line-height: 1.5;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-height: 3em;
 }
 
 .confidence {

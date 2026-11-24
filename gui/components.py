@@ -655,6 +655,16 @@ class ResultPanel:
         if animate:
             self._animate()
 
+    def render_speech_test(self, zodiac) -> None:
+        from datetime import datetime
+        self.render(Prediction(zodiac, 0, (), 0, True, '', datetime.now()), 0, preview=True)
+        self.result_state_text.text = '语音试听'
+        self.match_chip.content = '<i></i> AUDIO'
+        self.confidence.content = '—'
+        self.latency.content = '—'
+        self.record_id.text = ''
+        self.record_status.text = '试听展示，不计入识别记录'
+
     def _mark_preview(self) -> None:
         self.result_state.classes(remove='is-rejected')
         self.result_state_text.text = '模型预览'

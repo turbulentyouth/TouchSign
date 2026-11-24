@@ -12,6 +12,8 @@
 
 连接传感器，确认表面空载，点击「空载校准」，校准完成后压稳生肖牌子。默认显示原始画面。关闭 TouchSign 窗口即可退出程序并释放相机。
 
+界面默认开启「语音播报」，点击可静音。预览模式下，首选生肖连续稳定 0.8 秒后播放对应的普通话字名及生肖介绍、祝福语。正式识别在生成新识别记录时播报。同一次按压不重复播报相同生肖；新的生肖通过稳定判定后会立即替换当前播报。连续移开至少 0.5 秒后，相同生肖可再次播报。十二段音频采用指定 WAIC 十二生肖 demo 的角色化录音，开头保留报字，随后播放完整介绍和祝福语；录音随程序提供，可离线使用。播报文案与来源见 `assets/speech/manifest.json`。
+
 本版内置 `models/raw/best.onnx`，来自 `raw_20261031_155549_285715` 训练批次，输入格式为 `raw_bgr_v1`。保留了原始的 `unvalidated` 状态，界面采用「模型预览」，直接显示首选类别并跳过拒识阈值。该批次验证集缺少空载样本，使用原有拒识阈值时生肖正确接受率为 62.9%。仍需补采独立数据以验证正式识别表现。
 
 GitHub 仓库包含代码、训练权重 `models/raw/best.pt`、推理权重 `best.onnx` 和配套 `best.json`。原始采集图像保留在本机。
@@ -151,10 +153,16 @@ YOLO11n 分类包含 14 类；模型还输出特征向量。只有通过以下�
 ## EXE 准备
 
 ```powershell
+git clone https://github.com/turbulentyouth/TouchSign.git
+cd TouchSign
 uv venv --python 3.12 .venv-runtime
-uv pip install --python .venv-runtime\Scripts\python.exe -r requirements-build.txt
+uv pip install --python .venv-runtime\Scripts\python.exe -r requirements-runtime-lock.txt
 .\tools\build_exe.ps1
 ```
+
+在另一台 Windows x64 电脑上，从新克隆的仓库执行以上命令即可构建；需要先安装 Git、uv 和 Windows WebView2 Runtime，首次安装 Python 和依赖需要联网。已经进入项目目录时，跳过 `git clone` 和 `cd`。
+
+构建所需资源随仓库提供：`models/raw/best.onnx`、`models/raw/best.json`、十二段 `assets/speech/*.wav`、语音清单和播放脚本。`models/raw/best.pt` 也保留在仓库供训练使用。无需复制原始采集数据、训练输出、虚拟环境或旧版根目录权重。构建会检查十二段音频，并逐字节核对 EXE 内嵌的语音、模型和配置。
 
 构建脚本检查干净的 CPU 推理环境，验证原图模型及其清单，并将它们内嵌到 `dist/TouchSign.exe`。默认使用 `config/raw/config.yaml` 启动配置。构建结束后逐字节核对归档内的权重和配置，并检查训练依赖是否被排除。
 
@@ -178,3 +186,5 @@ Windows 相机和发布包的检查步骤见[部署指南](docs/camera-permissio
 实现入口：`collect.py` / `train.py` / `infer.py` / `main.py`；核心算法在 `core/`，训练专用代码在 `training/`，真实界面在 `gui/`。
 
 技术参考：[Ultralytics分类文档](https://docs.ultralytics.com/tasks/classify/)、[ONNX Runtime Python API](https://onnxruntime.ai/docs/api/python/api_summary.html)。
+
+语音播放期间出现新的有效识别结果时，立即中断当前段并播放新结果；静音会停止当前播报并清空待播项。“测试声音”会按顺序播放十二生肖并同步右侧卡片，标注“语音试听”，不写入识别记录。试听结束或手动停止后恢复实时识别。

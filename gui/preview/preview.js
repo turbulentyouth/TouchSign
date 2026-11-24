@@ -9,73 +9,73 @@
       glyph: "鼠", title: "子鼠", pinyin: "ZI", english: "RAT", branch: "子",
       index: "01", element: "水", direction: "北", directionEn: "NORTH",
       time: "子时", nature: "属水 · 居北", confidence: 98.7,
-      poem: "灵鼠衔金，机巧通灵"
+      poem: "嘿嘿，小不点大智慧！"
     },
     ox: {
       glyph: "牛", title: "丑牛", pinyin: "CHOU", english: "OX", branch: "丑",
       index: "02", element: "土", direction: "东北", directionEn: "NORTHEAST",
       time: "丑时", nature: "属土 · 居东北", confidence: 97.9,
-      poem: "厚德载物，耕耘有时"
+      poem: "俺老牛踏地有声！"
     },
     tiger: {
       glyph: "虎", title: "寅虎", pinyin: "YIN", english: "TIGER", branch: "寅",
       index: "03", element: "木", direction: "东北", directionEn: "NORTHEAST",
       time: "寅时", nature: "属木 · 居东北", confidence: 98.1,
-      poem: "风从虎啸，威镇山林"
+      poem: "虎啸山林，威震八方"
     },
     rabbit: {
       glyph: "兔", title: "卯兔", pinyin: "MAO", english: "RABBIT", branch: "卯",
       index: "04", element: "木", direction: "东", directionEn: "EAST",
       time: "卯时", nature: "属木 · 居东", confidence: 97.6,
-      poem: "月华凝露，静中藏慧"
+      poem: "月宫仙兔下凡来，温温柔柔带福气。"
     },
     dragon: {
       glyph: "龙", title: "辰龙", pinyin: "CHEN", english: "DRAGON", branch: "辰",
       index: "05", element: "土", direction: "东南", directionEn: "SOUTHEAST",
       time: "辰时", nature: "属土 · 居东南", confidence: 96.8,
-      poem: "云起龙骧，万象更新"
+      poem: "龙腾九天，呼风唤雨"
     },
     snake: {
       glyph: "蛇", title: "巳蛇", pinyin: "SI", english: "SNAKE", branch: "巳",
       index: "06", element: "火", direction: "东南", directionEn: "SOUTHEAST",
       time: "巳时", nature: "属火 · 居东南", confidence: 96.4,
-      poem: "灵蛇盘玉，幽微见真"
+      poem: "灵蛇曲伸，刚柔并济"
     },
     horse: {
       glyph: "马", title: "午马", pinyin: "WU", english: "HORSE", branch: "午",
       index: "07", element: "火", direction: "南", directionEn: "SOUTH",
       time: "午时", nature: "属火 · 居南", confidence: 97.2,
-      poem: "天马行空，一往无前"
+      poem: "蹄踏青云，日行千里"
     },
     goat: {
       glyph: "羊", title: "未羊", pinyin: "WEI", english: "GOAT", branch: "未",
       index: "08", element: "土", direction: "西南", directionEn: "SOUTHWEST",
       time: "未时", nature: "属土 · 居西南", confidence: 95.9,
-      poem: "温润如玉，和合生祥"
+      poem: "三阳开泰，和和美美"
     },
     monkey: {
       glyph: "猴", title: "申猴", pinyin: "SHEN", english: "MONKEY", branch: "申",
       index: "09", element: "金", direction: "西南", directionEn: "SOUTHWEST",
       time: "申时", nature: "属金 · 居西南", confidence: 96.7,
-      poem: "灵猴献瑞，机变无穷"
+      poem: "俺老孙来也！"
     },
     rooster: {
       glyph: "鸡", title: "酉鸡", pinyin: "YOU", english: "ROOSTER", branch: "酉",
       index: "10", element: "金", direction: "西", directionEn: "WEST",
       time: "酉时", nature: "属金 · 居西", confidence: 97.1,
-      poem: "金鸡报晓，光启东方"
+      poem: "雄鸡一唱天下白！"
     },
     dog: {
       glyph: "狗", title: "戌狗", pinyin: "XU", english: "DOG", branch: "戌",
       index: "11", element: "土", direction: "西北", directionEn: "NORTHWEST",
       time: "戌时", nature: "属土 · 居西北", confidence: 96.3,
-      poem: "忠守其门，信义相随"
+      poem: "忠义当先，守护左右"
     },
     pig: {
       glyph: "猪", title: "亥猪", pinyin: "HAI", english: "PIG", branch: "亥",
       index: "12", element: "水", direction: "西北", directionEn: "NORTHWEST",
       time: "亥时", nature: "属水 · 居西北", confidence: 95.7,
-      poem: "亥水生财，丰饶安泰"
+      poem: "嘿嘿，俺老猪拱门送福啦！"
     }
   };
 

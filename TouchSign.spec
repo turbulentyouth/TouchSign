@@ -4,8 +4,9 @@ import os
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 root = Path(SPECPATH)
+assets_root = Path(os.environ.get('TOUCHSIGN_ASSETS_DIR', str(root/'assets')))
 datas = collect_data_files('nicegui')
-datas += [(str(root/'assets'), 'assets'), (str(root/'gui'/'style.css'), 'gui'),
+datas += [(str(assets_root), 'assets'), (str(root/'gui'/'style.css'), 'gui'),
           (str(root/'config'/'raw'/'config.yaml'), 'config'),
           (str(root/'models'/'raw'/'best.onnx'), 'models/raw'),
           (str(root/'models'/'raw'/'best.json'), 'models/raw')]
