@@ -1,7 +1,7 @@
 # Build only in the clean requirements-build.txt environment.
 from pathlib import Path
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules, copy_metadata
 
 root = Path(SPECPATH)
 assets_root = Path(os.environ.get('TOUCHSIGN_ASSETS_DIR', str(root/'assets')))
@@ -11,6 +11,12 @@ datas += [(str(assets_root), 'assets'), (str(root/'gui'/'style.css'), 'gui'),
           (str(root/'models'/'raw'/'best.onnx'), 'models/raw'),
           (str(root/'models'/'raw'/'best.json'), 'models/raw')]
 binaries = collect_dynamic_libs('onnxruntime')
+binaries += collect_dynamic_libs('agx_cando')
+for package in ('python-can', 'python-can-agx-cando', 'pyagxarm', 'wrapt'):
+    datas += copy_metadata(package)
+datas += [(str(root/'vendor'/'manifest.json'), 'vendor'),
+          (str(root/'vendor'/'README.md'), 'vendor')]
+robot_imports = collect_submodules('pyAgxArm', filter=lambda name: '.demos' not in name and '.scripts' not in name) + collect_submodules('agx_cando')
 # Preserve the existing optional SSL compatibility mechanism in frozen builds.
 # Never collect arbitrary system directories; only the explicit override or the
 # project's documented two-DLL runtime directory is eligible.
@@ -22,7 +28,7 @@ if openssl_dir.is_dir():
     binaries += [(str(openssl_dir/name), 'runtime/openssl') for name in openssl_names]
 a = Analysis([str(root/'main.py')], pathex=[str(root)],
     binaries=binaries, datas=datas,
-    hiddenimports=['onnxruntime', 'onnxruntime.capi.onnxruntime_pybind11_state'],
+    hiddenimports=['onnxruntime', 'onnxruntime.capi.onnxruntime_pybind11_state'] + robot_imports,
     excludes=['torch', 'torchvision', 'torchaudio', 'ultralytics', 'onnx', 'training',
               'tests', 'matplotlib', 'pandas', 'scipy', 'IPython', 'tensorboard'],
     noarchive=False)

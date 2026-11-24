@@ -63,6 +63,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    args_list = sys.argv[1:] if argv is None else argv
+    if '--self-test-report' in args_list:
+        from robot.self_test import run_self_test
+        index = args_list.index('--self-test-report')
+        if index + 1 >= len(args_list):
+            raise ValueError('--self-test-report requires an output JSON path')
+        raise SystemExit(run_self_test(args_list[index + 1]))
     from core.config import load_config
 
     args = _parse_args(argv)
@@ -118,7 +125,7 @@ def _launch() -> None:
     except (Exception, SystemExit) as exc:
         if isinstance(exc, SystemExit) and not exc.code:
             return
-        if not frozen:
+        if not frozen or '--self-test-report' in sys.argv:
             raise
         detail = traceback.format_exc()
         if sys.stderr is not None:

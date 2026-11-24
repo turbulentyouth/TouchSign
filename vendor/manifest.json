@@ -1,0 +1,26 @@
+[
+  {
+    "file": "pyagxarm-1.0.0+touchsign.d90e234-py3-none-any.whl",
+    "sha256": "dd32936847498c6beb5781e2eb5b6443d9209e1e90bedca287e8f34c35d9fcdd",
+    "source_package": "pyAgxArm",
+    "files": 236
+  },
+  {
+    "file": "python_can_agx_cando-0.1.0+touchsign.fbd76e5-py3-none-win_amd64.whl",
+    "sha256": "906c2434edf3ca5e493f819305ca271e88c571fa408826221735e67436c9245a",
+    "source_package": "python-can-agx-cando",
+    "files": 11
+  },
+  {
+    "file": "python_can-4.6.1-py3-none-any.whl",
+    "sha256": "ae227997ed0c5dc63b9ed9058257785951d51d1f37565b4d21dfd48812ab2715",
+    "source_package": "python-can",
+    "files": 96
+  },
+  {
+    "file": "wrapt-1.17.3-py3-none-any.whl",
+    "sha256": "3c82794b8113fb7bd05de6455c593504e9908f96f06ebddb6450962f3d51ea1a",
+    "source_package": "wrapt",
+    "files": 12
+  }
+]

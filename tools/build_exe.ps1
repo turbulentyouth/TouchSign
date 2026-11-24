@@ -27,6 +27,30 @@ for key in ZODIAC_KEYS:
         if audio.getnframes() == 0:
             raise ValueError(f'Empty speech file: {key}')
 print('All twelve speech recordings and playback assets verified')
+import hashlib
+for entry in json.loads(Path('vendor/manifest.json').read_text(encoding='utf-8')):
+    path = Path('vendor/wheels') / entry['file']
+    if hashlib.sha256(path.read_bytes()).hexdigest() != entry['sha256']:
+        raise ValueError(f'Incorrect SDK dependency: {path}')
+from can.interface import _get_class_for_interface
+from agx_cando.dll import load_cando_dll
+from agx_cando.native import _load_receive_api
+from pyAgxArm import create_agx_arm_config, AgxArmFactory
+assert _get_class_for_interface('agx_cando').__name__ == 'AgxCandoBus'
+try:
+    load_cando_dll()
+    _load_receive_api()
+    print('Native CAN DLLs loaded; receiver ABI 2 verified')
+except OSError as exc:
+    if getattr(exc, 'winerror', None) != 4551:
+        raise
+    print('LIMITATION: Windows application control blocks the upstream CAN DLL. '
+          'Building offline-preview package; hardware loading remains unverified/blocked on this PC.')
+for profile in ('default', 'v111', 'v112', 'v120', 'v121'):
+    # Construct only: never connect or enable a physical arm during packaging.
+    AgxArmFactory.create_arm(create_agx_arm_config(robot='nero', firmeware_version=profile,
+                                                  interface='agx_cando', channel='0'))
+print('SDK imports and five firmware drivers verified (no hardware opened)')
 
 bad = [name for name in ('torch', 'torchvision', 'torchaudio', 'ultralytics') if util.find_spec(name)]
 bad += [dist.metadata['Name'] for dist in metadata.distributions()
@@ -55,6 +79,12 @@ import os
 from PyInstaller.archive.readers import CArchiveReader, pkg_archive_contents
 exe = Path('dist/TouchSign.exe')
 archive = CArchiveReader(exe)
+import agx_cando
+plugin = Path(agx_cando.__file__).parent
+for name in ('cando.dll', 'agx_receive.dll'):
+    relative = Path('agx_cando/bin/x64') / name
+    if archive.extract(str(relative)) != (plugin / 'bin/x64' / name).read_bytes():
+        raise ValueError(f'Incorrect embedded CAN DLL: {relative}')
 for path in (Path('models/raw/best.onnx'), Path('models/raw/best.json')):
     if archive.extract(str(path)) != path.read_bytes():
         raise ValueError(f'Incorrect embedded model file {path}')

@@ -1,4 +1,5 @@
 # Reproducible Windows x64 / Python 3.12 runtime + EXE build environment.
+-r requirements-robot.txt
 # Captured from clean .venv-runtime on 2026-10-31; contains no PyTorch or Ultralytics.
 # Install in a new environment using: uv pip install -r requirements-runtime-lock.txt
 

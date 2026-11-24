@@ -72,6 +72,7 @@ class TouchSignView:
         self._last_token = (0, 0)
         self.difference_preview = self.engine.model is None or self.engine.model.input_kind != RAW_INPUT_KIND
         self.stream_url = ''
+        self.robot_panel = None
 
         self.app = element('div', 'app runtime-app')
         with self.app:
@@ -79,6 +80,9 @@ class TouchSignView:
                                  on_connect=self._toggle_connection,
                                  on_camera_change=self._change_camera)
             self._build_runtime_controls()
+            if config.app.robot_controls:
+                from gui.robot_panel import RobotPanel
+                self.robot_panel = RobotPanel(self)
             with element('main', 'workspace'):
                 self.sensor = SensorPanel(config.sensor, PLACEHOLDER_URL, self.contact)
                 self.result = ResultPanel(config.recognition.confidence_threshold,
@@ -122,6 +126,7 @@ class TouchSignView:
                 'type="button" title="按生肖顺序试听十二段完整播报，再次点击可停止"')
             with test_button:
                 Text('span', '测试声音')
+            self.speech_test_button = test_button
             playlist = [(key, ZODIAC_BY_KEY[key].glyph) for key in ZODIAC_KEYS]
             test_button.on('click', js_handler=(
                 f'(event) => toggleSpeechTest(event.currentTarget, getHtmlElement({self.audio.id}), '
@@ -151,6 +156,8 @@ class TouchSignView:
             ui.run_javascript(f'stopRecognitionSpeech(getHtmlElement({self.audio.id}))')
 
     def _announce(self, state, timestamp: float) -> None:
+        if self.robot_panel is not None:
+            return
         if not self.speech_enabled or self.speech_testing:
             return
         key = self.speech.update(state, timestamp)
@@ -169,6 +176,10 @@ class TouchSignView:
             self._clear_result('试听结束，等待实时识别', '待识别')
 
     async def _tick(self) -> None:
+        if self.robot_panel is not None:
+            service = self.robot_panel.service
+            if service.mock or service.owner is not self.robot_panel or service.phase not in ('recognizing', 'releasing'):
+                return
         if self.speech_testing or self.analyzing or self.calibrating or self.scanning or self.loading_model:
             return
         self.analyzing = True
@@ -222,6 +233,8 @@ class TouchSignView:
             if statistics is not None:
                 self.sensor.set_feed_rate(statistics[0])
             self._render_preview(packet.frame)
+            if self.robot_panel is not None:
+                self.robot_panel.service.observe(state, packet.timestamp, packet.serial)
             self._render_state(state)
             self._announce(state, packet.timestamp)
         except Exception as exc:
@@ -252,7 +265,9 @@ class TouchSignView:
             self.sensor._set_chip('DIFF', 'live')
             self.sensor._set_note('与空载基线的绝对差分')
 
-    def _render_state(self, state) -> None:
+    def _render_state(self, state, *, force=False) -> None:
+        if self.robot_panel is not None and not force:
+            return
         if self.speech_testing:
             return
         contact = state.contact
@@ -305,6 +320,8 @@ class TouchSignView:
             self.result.render_records(self.records)
 
     def _clear_result(self, message: str, status: str = '未识别') -> None:
+        if self.robot_panel is not None and self.robot_panel.result_latched:
+            return
         if self.speech_testing:
             return
         self.current = None
@@ -313,6 +330,8 @@ class TouchSignView:
         self.matrix.set_active('')
 
     async def _calibrate(self) -> None:
+        if self.robot_panel is not None and self.robot_panel.locked:
+            return
         if self.calibrating or self.scanning or self.loading_model:
             return
         if not self.streaming or not self.connected:
@@ -402,6 +421,8 @@ class TouchSignView:
         dialog.open()
 
     async def _reload_model(self, path: str | None = None, *, preview: bool | None = None) -> bool:
+        if self.robot_panel is not None and self.robot_panel.locked:
+            return False
         if self.calibrating or self.loading_model or self.scanning:
             ui.notify('请等待当前操作完成', type='warning')
             return False
@@ -428,6 +449,8 @@ class TouchSignView:
             self.reload_button.props(remove='disabled')
 
     async def _refresh_cameras(self) -> None:
+        if self.robot_panel is not None and self.robot_panel.locked:
+            return
         if self.scanning:
             return
         self.scanning = True
@@ -474,6 +497,8 @@ class TouchSignView:
             self.sensor.show_stream(self.stream_url, camera, pending=True)
 
     def _change_camera(self, event) -> None:
+        if self.robot_panel is not None and self.robot_panel.locked:
+            return
         value = event.args[0] if isinstance(event.args, list) and event.args else event.args
         try:
             index = int(value)
@@ -494,6 +519,8 @@ class TouchSignView:
         self._clear_result('设备已变化，请重新进行空载校准', '待校准')
 
     def _toggle_connection(self) -> None:
+        if self.robot_panel is not None and self.robot_panel.locked:
+            return
         self.connected = not self.connected
         self.topbar.set_connected(self.connected)
         self.sensor.set_connected(self.connected)
@@ -507,11 +534,16 @@ class TouchSignView:
             self.topbar.set_status('传感器离线', 'OFFLINE')
 
     def _on_disconnect(self) -> None:
+        if self.robot_panel is not None and self.robot_panel.service.owner is self.robot_panel:
+            asyncio.create_task(self.robot_panel.service.disconnect(self.robot_panel))
         self._generation += 1
         camera_manager.close_if_owner(self)
 
 
 def register_pages(config: Config) -> None:
+    if config.app.robot_controls:
+        from gui.robot_panel import shutdown_robot
+        app.on_shutdown(shutdown_robot)
     app.add_static_files('/assets', str(ASSETS_DIR))
     try:
         camera_manager.scan(max_index=config.sensor.scan_max_index)

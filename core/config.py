@@ -27,6 +27,7 @@ def resolve_path(value: str | Path, *, writable: bool = False) -> Path:
 
 @dataclass(frozen=True, slots=True)
 class AppConfig:
+    robot_controls: bool = False
     title: str = '触象 · TouchSign | 视触觉生肖识别系统'
     host: str = '127.0.0.1'
     port: int = 8080
