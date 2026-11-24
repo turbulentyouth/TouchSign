@@ -570,6 +570,9 @@ def register_pages(config: Config) -> None:
              dark=True)
     def index() -> None:
         apply_theme()
+        if not config.app.native and config.app.show:
+            with ui.row().classes('w-full justify-end'):
+                ui.button('退出程序', on_click=app.shutdown, icon='power_settings_new').props('flat dense')
         TouchSignView(config)
 
 
@@ -579,10 +582,15 @@ def run_app(config: Config, *, host: str | None = None, port: int | None = None,
     favicon = config.favicon_path
     use_native = config.app.native if native is None else native
     # Native windows use an available local port unless the caller supplies one.
-    run_port = port if port is not None else (None if use_native else config.app.port)
+    show_browser = config.app.show if show is None else show
+    if port is None and not use_native and show_browser:
+        from nicegui.native import find_open_port
+        run_port = find_open_port()
+    else:
+        run_port = port if port is not None else (None if use_native else config.app.port)
     ui.run(host=host or config.app.host, port=run_port, title=config.app.title,
            favicon=str(favicon) if favicon and favicon.is_file() else None, dark=True,
-           show=config.app.show if show is None else show,
+           show=show_browser,
            reload=config.app.reload if reload is None else reload, native=use_native,
            window_size=(config.app.window_width, config.app.window_height) if use_native else None,
            reconnect_timeout=10.0)

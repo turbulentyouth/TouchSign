@@ -2,8 +2,8 @@
 app:
   robot_controls: true
   title: "触象 · TouchSign | 原图识别预览"
-  native: true
-  show: false
+  native: false
+  show: true
 recognition:
   model_path: "models/raw/best.onnx"
   preview: true
