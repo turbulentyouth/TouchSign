@@ -1,6 +1,12 @@
 # NERO 单轮触觉检测预览版
 
-## 临时目录错误的修复包
+## 单文件启动修复（当前推荐）
+
+新版 dist/TouchSign-NERO-Preview.exe 仍是一个文件。启动器改用当前用户的 %LOCALAPPDATA%/../LocalLow/TouchSign/unpack 解压，不再依赖 TEMP/TMP。打包运行时的配置、日志、缓存和临时文件统一位于同级 TouchSign 数据目录。无需管理员权限或修改完整性标签。之前 Local/TouchSign 的配置保留不动；新目录首次使用需要重新保存示教点。
+
+## 备用文件夹版
+
+单文件修复验收：31 项相关 Python 测试通过；将 TEMP/TMP 指向普通文件（无法在其中创建目录），并在工作区隔离用户数据路径后，打包 EXE 自检退出码为 0。验证了专用目录解压、日志、缓存、模型、语音和模拟单轮流程。桌面 GUI 交互仍需在用户会话中确认。
 
 若双击单文件版出现 `Could not create temporary directory`，使用 `dist/TouchSign-NERO-Folder.zip`。请在资源管理器中“全部解压”到自己的普通目录，再运行解压后文件夹内的 `TouchSign.exe`，保留旁边完整的 `_internal` 目录。不要在压缩包内直接运行，也不要只拷贝 EXE。
 

@@ -15,9 +15,10 @@ import ctypes
 import os
 import sys
 from pathlib import Path
+from core.paths import user_data_root
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CACHE_DIR = ((Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'TouchSign' / '.cache')
+CACHE_DIR = ((user_data_root() / '.cache')
              if getattr(sys, 'frozen', False) else PROJECT_ROOT / '.cache')
 
 _DLL_DIR_HANDLES: list[object] = []
@@ -40,6 +41,12 @@ def ssl_ready() -> bool:
 
 
 def _prepare_cache_dirs() -> None:
+    if getattr(sys, 'frozen', False):
+        import tempfile
+        temp_dir = user_data_root() / 'temp'
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        os.environ['TEMP'] = os.environ['TMP'] = str(temp_dir)
+        tempfile.tempdir = str(temp_dir)
     matplotlib_dir = CACHE_DIR / 'matplotlib'
     matplotlib_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault('MPLCONFIGDIR', str(matplotlib_dir))

@@ -107,7 +107,8 @@ def _launch() -> None:
     log_path = None
     try:
         if frozen:
-            candidate_log = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'TouchSign' / 'logs' / 'startup.log'
+            from core.paths import user_data_root
+            candidate_log = user_data_root() / 'logs' / 'startup.log'
             candidate_log.parent.mkdir(parents=True, exist_ok=True)
             # Windowed EXEs have no stdout/stderr. Uvicorn and spawned native
             # windows need real streams for logging and startup diagnostics.

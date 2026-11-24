@@ -7,10 +7,11 @@ import os
 import sys
 from typing import Any
 import yaml
+from core.paths import user_data_root
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FROZEN = bool(getattr(sys, 'frozen', False))
-DATA_ROOT = (Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'TouchSign') if FROZEN else PROJECT_ROOT
+DATA_ROOT = user_data_root() if FROZEN else PROJECT_ROOT
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / 'config' / 'config.yaml'
 
 

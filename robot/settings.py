@@ -5,6 +5,7 @@ import math
 import os
 import tempfile
 import yaml
+from core.paths import user_data_root
 
 
 def joints(value):
@@ -62,7 +63,7 @@ class RobotSettings:
 
 class SettingsStore:
     def __init__(self, path=None):
-        self.path = Path(path) if path else Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'TouchSign' / 'config.yaml'
+        self.path = Path(path) if path else user_data_root() / 'config.yaml'
 
     def load(self):
         raw = yaml.safe_load(self.path.read_text(encoding='utf-8')) if self.path.exists() else {}

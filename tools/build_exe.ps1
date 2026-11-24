@@ -79,6 +79,9 @@ import os
 from PyInstaller.archive.readers import CArchiveReader, pkg_archive_contents
 exe = Path('dist/TouchSign.exe')
 archive = CArchiveReader(exe)
+expected_tmpdir = r'pyi-runtime-tmpdir %LOCALAPPDATA%\..\LocalLow\TouchSign\unpack'
+if expected_tmpdir not in archive.options:
+    raise ValueError('Missing per-user LocalLow extraction path')
 import agx_cando
 plugin = Path(agx_cando.__file__).parent
 for name in ('cando.dll', 'agx_receive.dll'):
@@ -104,10 +107,8 @@ for entry in pkg_archive_contents(exe):
 print(f'Archive verified: {exe.resolve()} ({exe.stat().st_size / 1024**2:.1f} MiB)')
 '@
     if ($LASTEXITCODE -ne 0) { throw 'Single-file archive verification failed.' }
-    # Restricted build environments can mark outputs Low, preventing the
-    # one-file bootloader from extracting into the desktop user's TEMP folder.
-    & icacls.exe (Join-Path $projectRoot 'dist\TouchSign.exe') /setintegritylevel Medium
-    if ($LASTEXITCODE -ne 0) { throw 'Could not set the EXE integrity level to Medium.' }
+    # The one-file bootloader extracts into per-user LocalLow/TouchSign.
+    # Do not depend on changing an inherited integrity label during packaging.
     Write-Output 'Ready: dist\TouchSign.exe'
 } finally {
     $env:PYINSTALLER_CONFIG_DIR = $previousBuildCache
