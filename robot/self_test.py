@@ -8,6 +8,7 @@ import time
 import wave
 from robot.settings import RobotSettings, SettingsStore
 from robot.service import RobotService
+from robot.transport import can_interface
 
 
 class _Selector(selectors.SelectSelector):
@@ -66,19 +67,26 @@ def run_self_test(report_path):
             with wave.open(str(root/'assets/speech'/f'{key}.wav'),'rb') as f:
                 assert f.getnframes()>0
         report['speech_files']=len(ZODIAC_KEYS)
-        assert _get_class_for_interface('agx_cando').__name__=='AgxCandoBus'
+        interface = can_interface()
+        _get_class_for_interface(interface)
+        report['can_interface'] = interface
         for version in ('default','v111','v112','v120','v121'):
-            AgxArmFactory.create_arm(create_agx_arm_config(robot='nero',firmeware_version=version,interface='agx_cando',channel='0'))
+            AgxArmFactory.create_arm(create_agx_arm_config(
+                robot='nero', firmeware_version=version, interface=interface,
+                channel=RobotSettings().channel, auto_connect=False, enable_check_can=False))
         report['sdk_firmware_profiles']=5
-        from agx_cando.dll import load_cando_dll
-        from agx_cando.native import _load_receive_api
-        try:
-            load_cando_dll()
-            _load_receive_api()
-            report['native_can_dll']='loaded; ABI 2'
-        except Exception as exc:
-            report['native_can_dll']=str(exc)
-            report['hardware_limitation']=True
+        if interface == 'agx_cando':
+            from agx_cando.dll import load_cando_dll
+            from agx_cando.native import _load_receive_api
+            try:
+                load_cando_dll()
+                _load_receive_api()
+                report['native_can_dll']='loaded; ABI 2'
+            except Exception as exc:
+                report['native_can_dll']=str(exc)
+                report['hardware_limitation']=True
+        else:
+            report['native_can_dll']='not required (Linux SocketCAN)'
         with tempfile.TemporaryDirectory() as tmp, asyncio.Runner(loop_factory=_Loop) as runner:
             report['cycle']=runner.run(_cycle(Path(tmp)))
         report['offline_checks_passed']=True

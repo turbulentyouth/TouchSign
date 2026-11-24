@@ -139,7 +139,7 @@ class DesktopBackend:
                 backend = message.get('backend', 'mock')
                 if backend == 'nero' and message.get('real_confirmed') is not True:
                     raise ValueError('真机需先完成固件、夹爪、负载与路径现场确认')
-                settings = replace(s.settings, backend=backend, channel=str(message.get('channel', '0')))
+                settings = replace(s.settings, backend=backend, channel=str(message.get('channel', s.settings.channel)))
                 settings.validate()
                 self.store.save(settings)
                 s.settings = settings
@@ -163,11 +163,12 @@ class DesktopBackend:
                               mock_key=message.get('key', 'rat'), on_result=self._result,
                               ready_check=self._sensor_ready)
             elif name == 'stop':
-                await s.stop(self._owner)
+                await s.stop_and_return(self._owner, stream_id=self.stream_id,
+                                        ready_check=self._sensor_ready)
             elif name == 'settings':
                 if s.busy or s.teaching:
                     raise ValueError('请结束当前运动或示教')
-                allowed = {'speed_percent', 'open_width', 'close_width', 'gripper_force'}
+                allowed = {'speed_percent', 'open_width', 'close_width', 'gripper_close_speed', 'gripper_force'}
                 values = message.get('values', {})
                 if not isinstance(values, dict) or set(values) - allowed:
                     raise ValueError('无效夹爪或速度设置')
@@ -285,11 +286,11 @@ class DesktopBackend:
         packet = camera_manager.frame_packet()
         sensor_connected = bool(packet and time.monotonic()-packet.timestamp < self.config.recognition.max_frame_age)
         self._emit('status', phase=s.phase, message=s.message, busy=s.busy or self._command_busy,
-                   teaching=s.teaching, connected=s.arm is not None, backend=s.settings.backend,
+                   teaching=s.teaching, finishing=s.finishing, connected=s.arm is not None, backend=s.settings.backend,
                    points=dict(s.points), model=self.engine.model_status if self.engine else '正在加载',
                    sensor=sensor_connected, sensor_ready=self._sensor_ready(), calibrated=bool(self.engine and self.engine.detector.calibrated),
                    calibrating=self._calibrating, cycle=s.cycle_id, cycle_id=s.cycle_id, completed=s.completed, speech=self._speech,
-                   settings={k: getattr(s.settings, k) for k in ('channel','speed_percent','open_width','close_width','gripper_force')})
+                   settings={k: getattr(s.settings, k) for k in ('channel','speed_percent','open_width','close_width','gripper_close_speed','gripper_force')})
 
     async def _tick(self):
         while not self._closing:
@@ -317,7 +318,10 @@ class DesktopBackend:
                             frame = cv2.resize(frame, (900, round(h*900/w)))
                         ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 78])
                         state = None
-                        if not self._calibrating and not self.service.mock and self.service.phase in ('recognizing','releasing'):
+                        if (not self._calibrating and not self.service.mock
+                                and self.service.phase in ('recognizing','releasing')
+                                and (self.service.phase != 'recognizing'
+                                     or packet.timestamp > self.service.recognition_start)):
                             state = self.engine.process(packet.frame, sequence=packet.sequence,
                                                         timestamp=packet.timestamp, stream_id=packet.serial)
                         return encoded.tobytes() if ok else None, state

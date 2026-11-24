@@ -19,12 +19,12 @@
   function renderStatus(s) {
     if (!settingsLoaded && s.settings) {
       const v=s.settings; $('channel').value=v.channel; $('speed').value=v.speed_percent;
-      $('open-width').value=v.open_width*1000; $('close-width').value=v.close_width*1000; $('force').value=v.gripper_force;
+      $('open-width').value=v.open_width*1000; $('close-width').value=v.close_width*1000; $('force').value=v.gripper_force; $('close-speed').value=v.gripper_close_speed*1000;
       settingsLoaded=true;
     }
     state=s; window.touchsign.state=s;
-    const connected=!!s.connected, busy=!!s.busy, teach=!!s.teaching, fault=s.phase==='fault';
-    $('system-status').textContent=({disconnected:'未连接',idle:'待检测',teaching:'示教中',switching:'切换模式',preparing:'准备检测',approaching:'到达检测点',recognizing:'识别中',releasing:'释放中',returning:'收回中',complete:'本轮完成',fault:'已停止 / 故障'})[s.phase] || '就绪';
+    const connected=!!s.connected, busy=!!s.busy, teach=!!s.teaching;
+    $('system-status').textContent=({disconnected:'未连接',disabled:'等待使能',idle:'待检测',teaching:'示教中',switching:'切换模式',preparing:'准备检测',approaching:'到达检测点',gripping:'等待夹爪到位',recognizing:'识别中',releasing:'释放中',returning:'收回中',complete:'本轮完成',stopped:'已停止',fault:'故障'})[s.phase] || '就绪';
     $('robot-status').textContent=s.message || '就绪';
     $('model-status').textContent=s.model || '';
     $('sensor-status').textContent=s.sensor ? '传感器已连接' : 'NO INPUT';
@@ -35,15 +35,15 @@
     $('contact-status').textContent=s.calibrated ? '空载基线已校准' : '请移开所有物体，再进行空载校准';
     const points=s.points || {};
     $('points').textContent=`检测点：${points.detect?'已保存':'未保存'} · 收回点：${points.home?'已保存':'未保存'}`;
-    $('detect').disabled=!connected||busy||teach||fault||!points.detect||!points.home;
-    $('stop').disabled=!connected;
+    $('detect').disabled=!connected||busy||teach||!['idle','complete'].includes(s.phase)||!points.detect||!points.home;
+    $('stop').disabled=!connected||!!s.finishing||teach||!points.home||['disabled','switching'].includes(s.phase);
     $('robot-connect').disabled=connected||busy;
     $('robot-disconnect').disabled=!connected;
     $('backend').disabled=connected; $('channel').disabled=connected;
-    $('teach-start').disabled=!connected||busy||teach||fault;
+    $('teach-start').disabled=!connected||busy||teach||!['idle','disabled','complete'].includes(s.phase);
     for(const id of ['save-detect','save-home','teach-end']) $(id).disabled=!teach||busy;
     $('mock-drag').disabled=!teach||busy||s.backend==='nero';
-    for(const id of ['calibrate','scan','camera-connect','settings-save','speed','open-width','close-width','force']) $(id).disabled=busy||teach;
+    for(const id of ['calibrate','scan','camera-connect','settings-save','speed','open-width','close-width','close-speed','force']) $(id).disabled=busy||teach;
   }
   function receive(e) {
     const m=e.data; if (!m || typeof m!=='object') return;
@@ -74,7 +74,7 @@
   const preview=document.createElement('button');preview.className='runtime-button';preview.textContent='原始图 · 切换差分';preview.onclick=()=>{difference=!difference;send('preview',{difference});preview.textContent=difference?'差分图 · 切换原图':'原始图 · 切换差分';};$('toolbar').insertBefore(preview,$('speech-toggle'));
   const reload=document.createElement('button');reload.className='runtime-button';reload.textContent='重新加载模型';reload.onclick=()=>send('reload_model');$('toolbar').insertBefore(reload,$('model-status'));
   const disconnect=document.createElement('button');disconnect.className='runtime-button';disconnect.textContent='断开传感器';disconnect.onclick=()=>send('disconnect_camera');$('camera-connect').after(disconnect);
-  click('settings-save','settings',()=>({values:{speed_percent:Number($('speed').value),open_width:Number($('open-width').value)/1000,close_width:Number($('close-width').value)/1000,gripper_force:Number($('force').value)}}));
+  click('settings-save','settings',()=>({values:{speed_percent:Number($('speed').value),open_width:Number($('open-width').value)/1000,close_width:Number($('close-width').value)/1000,gripper_close_speed:Number($('close-speed').value)/1000,gripper_force:Number($('force').value)}}));
   click('speech-test','test_speech',()=>({key:$('mock-key').value}));
   $('speech-toggle').onclick=()=>{speech=!speech;send('speech',{enabled:speech});$('speech-toggle').textContent='语音播报 · '+(speech?'开':'关');};
   function clock(){const d=new Date();$('clock').textContent=d.toLocaleTimeString();$('date').textContent=d.toLocaleDateString();} clock();setInterval(clock,1000);

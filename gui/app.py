@@ -14,6 +14,7 @@ from pathlib import Path
 import cv2
 from fastapi.responses import Response, StreamingResponse
 from nicegui import app, run, ui
+from nicegui.server import Server
 
 from core.camera import CameraInfo, camera_manager, describe_cameras
 from core.config import Config
@@ -36,7 +37,8 @@ _MJPEG_PART = b'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\
 
 async def _mjpeg_stream():
     last_token = (0, 0)
-    while True:
+    server = getattr(Server, 'instance', None)
+    while not (server and server.should_exit):
         serial, sequence, jpeg = camera_manager.snapshot()
         if jpeg is not None and (serial, sequence) != last_token:
             last_token = serial, sequence
@@ -93,7 +95,8 @@ class TouchSignView:
             self.matrix = ZodiacMatrix('')
             self.footer = AppFooter()
 
-        cached = next((item for item in self.cameras if item.available), None)
+        from core.camera import preferred_camera
+        cached = preferred_camera(self.cameras, config.sensor.preferred_camera_name)
         self.topbar.set_cameras(self.cameras, cached.index if cached else None)
         self.topbar.set_clock(datetime.now())
         self._update_model_status()
@@ -118,7 +121,7 @@ class TouchSignView:
             if self.config.app.robot_controls:
                 self.detect_button = ui.button('检测（运行一轮）', on_click=self._detect_robot).classes('runtime-detect').props('no-caps')
                 self.detect_button.disable()
-                self.robot_stop_button = ui.button('停止本轮', on_click=self._stop_robot).classes('runtime-stop').props('no-caps')
+                self.robot_stop_button = ui.button('停止本轮并收回', on_click=self._stop_robot).classes('runtime-stop').props('no-caps')
                 self.robot_stop_button.disable()
                 self.robot_settings_toggle = ui.button('展开机械臂设置', on_click=self._toggle_robot_settings).classes('runtime-settings-toggle').props('flat no-caps aria-expanded=false')
             self.exit_button = ui.button('退出程序', on_click=app.shutdown, icon='power_settings_new').classes('runtime-exit').props('no-caps')
@@ -245,6 +248,9 @@ class TouchSignView:
                     self._render_state(state)
                     self.sensor.show_placeholder('无实时信号，识别已停止')
                     self.signal_lost = True
+                return
+            if (self.robot_panel is not None and service.phase == 'recognizing'
+                    and packet.timestamp <= service.recognition_start):
                 return
             token = packet.serial, packet.sequence
             if token == self._last_token:
@@ -488,10 +494,10 @@ class TouchSignView:
         self.sensor.show_placeholder('正在搜索传感器')
         try:
             self.cameras = await run.io_bound(camera_manager.scan,
-                                             max_index=self.config.sensor.scan_max_index) or []
-            available = [camera for camera in self.cameras if camera.available]
-            selected = next((camera for camera in available if camera.index == previous), None)
-            selected = selected or (available[0] if available else None)
+                                             max_index=self.config.sensor.scan_max_index,
+                                             name_filter=self.config.sensor.preferred_camera_name) or []
+            from core.camera import preferred_camera
+            selected = preferred_camera(self.cameras, self.config.sensor.preferred_camera_name, previous)
             self.topbar.set_cameras(self.cameras, selected.index if selected else None)
             if selected:
                 self._activate_camera(selected)
@@ -567,17 +573,29 @@ class TouchSignView:
         camera_manager.close_if_owner(self)
 
 
+async def _shutdown_devices(robot_controls: bool) -> None:
+    try:
+        if robot_controls:
+            from gui.robot_panel import shutdown_robot
+            await shutdown_robot()
+    except Exception:
+        LOGGER.exception('退出时机械臂清理失败')
+    finally:
+        camera_manager.close()
+
+
 def register_pages(config: Config) -> None:
-    if config.app.robot_controls:
-        from gui.robot_panel import shutdown_robot
-        app.on_shutdown(shutdown_robot)
+    async def shutdown_devices():
+        await _shutdown_devices(config.app.robot_controls)
+
+    app.on_shutdown(shutdown_devices)
     app.add_static_files('/assets', str(ASSETS_DIR))
     try:
-        camera_manager.scan(max_index=config.sensor.scan_max_index)
+        camera_manager.scan(max_index=config.sensor.scan_max_index,
+                            name_filter=config.sensor.preferred_camera_name)
         LOGGER.info('摄像头扫描：\n%s', describe_cameras(camera_manager.cameras))
     except Exception:
         LOGGER.exception('启动时摄像头扫描失败')
-    app.on_shutdown(camera_manager.close)
 
     @app.get('/camera/stream')
     async def camera_stream() -> StreamingResponse:
@@ -623,4 +641,5 @@ def run_app(config: Config, *, host: str | None = None, port: int | None = None,
            show=False,  # Explicit launcher logs results and detects missing UI connections.
            reload=config.app.reload if reload is None else reload, native=use_native,
            window_size=(config.app.window_width, config.app.window_height) if use_native else None,
-           reconnect_timeout=10.0)
+           # Streams end on should_exit; retain a bound for other stalled clients.
+           reconnect_timeout=10.0, timeout_graceful_shutdown=3.0)

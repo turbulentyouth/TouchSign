@@ -8,6 +8,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -30,6 +31,7 @@ class CameraInfo:
     fps: float = 0.0
     backend: str = ''
     available: bool = True
+    error: str = ''
 
     @property
     def display_name(self) -> str:
@@ -61,12 +63,16 @@ class CameraInfo:
             label += f' · {self.fps:.0f} FPS'
         if not self.available:
             label += ' · 不可用'
+        if self.error:
+            label += f' · {self.error}'
         return label
 
 
 def _backends() -> tuple[tuple[int, str], ...]:
     if sys.platform == 'win32':
         return ((cv2.CAP_DSHOW, 'DSHOW'), (cv2.CAP_MSMF, 'MSMF'))
+    if sys.platform == 'linux':
+        return ((cv2.CAP_V4L2, 'V4L2'),)
     return ((cv2.CAP_ANY, 'AUTO'),)
 
 
@@ -78,14 +84,21 @@ def _try_capture(index: int, backend: int) -> cv2.VideoCapture | None:
     if not capture.isOpened():
         capture.release()
         return None
+    if sys.platform == 'linux':
+        # VBTS advertises 1600x1200 at 30 FPS in MJPEG, but only 5 FPS in YUYV.
+        # Unsupported properties leave a camera's existing format unchanged.
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     # 保持原训练数据与采集界面使用的传感器分辨率。
     capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1600)
     capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1200)
+    if sys.platform == 'linux':
+        capture.set(cv2.CAP_PROP_FPS, 30)
     return capture
 
 
 def _open_capture(camera: CameraInfo) -> cv2.VideoCapture | None:
-    """按 DirectShow → Media Foundation 的顺序打开指定序号的摄像头。"""
+    """使用当前系统的视频后端打开摄像头。"""
     backends = list(_backends())
     if camera.backend:
         backends.sort(key=lambda item: item[1] != camera.backend)
@@ -128,7 +141,7 @@ def _probe_camera(index: int) -> CameraInfo | None:
                 fps = 0.0
             return CameraInfo(
                 index=index,
-                name='',
+                name=_camera_name(index),
                 width=int(width),
                 height=int(height),
                 fps=round(fps, 1),
@@ -139,13 +152,51 @@ def _probe_camera(index: int) -> CameraInfo | None:
     return None
 
 
-def scan_cameras(*, max_index: int = DEFAULT_SCAN_MAX_INDEX) -> list[CameraInfo]:
+def _camera_name(index: int) -> str:
+    if sys.platform == 'linux':
+        try:
+            return Path(f'/sys/class/video4linux/video{index}/name').read_text().strip()
+        except OSError:
+            pass
+    return ''
+
+
+def preferred_camera(cameras: list[CameraInfo], name: str = '',
+                     previous_index: int | None = None) -> CameraInfo | None:
+    """A configured sensor must match; never silently substitute a webcam."""
+    matches = [camera for camera in cameras if camera.available
+               and (not name or name.casefold() in camera.name.casefold())]
+    return next((camera for camera in matches if camera.index == previous_index),
+                matches[0] if matches else None)
+
+
+def scan_cameras(*, max_index: int = DEFAULT_SCAN_MAX_INDEX, name_filter: str = '') -> list[CameraInfo]:
     """按设备编号探测可读的摄像头，供主界面的设备列表使用。"""
     cameras = []
-    for index in range(max(1, int(max_index))):
+    indices = range(max(1, int(max_index)))
+    if sys.platform == 'linux':
+        # Linux nodes can be sparse or above scan_max_index after replugging.
+        indices = sorted(int(p.name[5:]) for p in Path('/dev').glob('video*')
+                         if p.name[5:].isdigit())
+    for index in indices:
+        if sys.platform == 'linux':
+            if name_filter and name_filter.casefold() not in _camera_name(index).casefold():
+                continue
+            from core.linux_video import is_color_capture
+            try:
+                if not is_color_capture(index):
+                    continue
+            except OSError as exc:
+                cameras.append(CameraInfo(index, _camera_name(index), available=False,
+                                          error=f'无法访问设备：{exc.strerror}'))
+                continue
         info = _probe_camera(index)
         if info is not None:
             cameras.append(info)
+        elif sys.platform == 'linux':
+            reason = '设备已发现但无法读取，请检查是否被其他 TouchSign 或相机程序占用'
+            LOGGER.warning('/dev/video%s：%s', index, reason)
+            cameras.append(CameraInfo(index, _camera_name(index), available=False, error=reason))
     return cameras
 
 
@@ -318,6 +369,9 @@ class CameraStream:
     def _publish(self, frame: np.ndarray) -> None:
         if frame.ndim == 3 and frame.shape[2] == 4:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        # Apply the sensor mounting orientation once, before both JPEG preview
+        # and BGR publication, so calibration and recognition see the same view.
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
         jpeg = None
         if self._encode_jpeg:
             try:
@@ -365,11 +419,11 @@ class CameraManager:
     def stream(self) -> CameraStream | None:
         return self._stream
 
-    def scan(self, *, max_index: int = DEFAULT_SCAN_MAX_INDEX) -> list[CameraInfo]:
+    def scan(self, *, max_index: int = DEFAULT_SCAN_MAX_INDEX, name_filter: str = '') -> list[CameraInfo]:
         """重新扫描摄像头；扫描前会释放当前采集以允许设备被重新打开。"""
         with self._control_lock:
             self.close()
-            self._cameras = scan_cameras(max_index=max_index)
+            self._cameras = scan_cameras(max_index=max_index, name_filter=name_filter)
             return list(self._cameras)
 
     def select(
@@ -448,5 +502,6 @@ def describe_cameras(cameras: list[CameraInfo]) -> str:
         lines.append(
             f'  #{camera.index}  {camera.display_name}  '
             f'{camera.resolution}  {camera.fps:.0f} FPS  [{state}]'
+            + (f'  {camera.error}' if camera.error else '')
         )
     return '\n'.join(lines)

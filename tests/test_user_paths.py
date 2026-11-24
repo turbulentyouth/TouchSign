@@ -11,16 +11,24 @@ from robot.settings import SettingsStore
 
 class UserPathTests(unittest.TestCase):
     def test_frozen_windows_uses_user_locallow_not_temp(self):
-        with patch.dict(os.environ, {'LOCALAPPDATA': r'C:\Users\example\AppData\Local', 'TEMP': 'Z:\\unavailable'}), \
+        local = Path('/Users/example/AppData/Local')
+        with patch.dict(os.environ, {'LOCALAPPDATA': str(local), 'TEMP': 'Z:\\unavailable'}), \
                 patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'platform', 'win32'):
-            expected = Path(r'C:\Users\example\AppData\LocalLow\TouchSign')
+            expected = local.parent / 'LocalLow' / 'TouchSign'
             self.assertEqual(user_data_root(), expected)
             self.assertEqual(SettingsStore().path, expected / 'config.yaml')
 
     def test_source_keeps_existing_settings_location(self):
-        with patch.dict(os.environ, {'LOCALAPPDATA': r'C:\Users\example\AppData\Local'}), \
-                patch.object(sys, 'frozen', False, create=True):
-            self.assertEqual(user_data_root(), Path(r'C:\Users\example\AppData\Local\TouchSign'))
+        local = Path('/Users/example/AppData/Local')
+        with patch.dict(os.environ, {'LOCALAPPDATA': str(local)}), \
+                patch.object(sys, 'frozen', False, create=True), patch.object(sys, 'platform', 'win32'):
+            self.assertEqual(user_data_root(), local / 'TouchSign')
+
+    def test_linux_uses_xdg_data_home(self):
+        with patch.object(sys, 'platform', 'linux'), patch.dict(os.environ, {'XDG_DATA_HOME': '/tmp/touchsign-data'}):
+            self.assertEqual(user_data_root(), Path('/tmp/touchsign-data/TouchSign'))
+        with patch.object(sys, 'platform', 'linux'), patch.dict(os.environ, {'XDG_DATA_HOME': 'relative'}):
+            self.assertEqual(user_data_root(), Path.home() / '.local/share/TouchSign')
 
     def test_frozen_runtime_replaces_invalid_temp_for_children(self):
         from gui import runtime

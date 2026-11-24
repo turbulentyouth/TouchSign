@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 import os
 import tempfile
+import sys
 import yaml
 from core.paths import user_data_root
 
@@ -20,11 +21,13 @@ def joints(value):
 @dataclass
 class RobotSettings:
     backend: str = 'mock'
-    channel: str = '0'
+    channel: str = field(default_factory=lambda: 'can0' if sys.platform == 'linux' else '0')
     speed_percent: int = 10
     open_width: float = 0.06
     close_width: float = 0.02
     gripper_force: float = 1.0
+    gripper_close_speed: float = 0.005  # m/s, software position ramp
+    grip_timeout: float = 30.0
     move_timeout: float = 20.0
     recognize_timeout: float = 8.0
     release_timeout: float = 5.0
@@ -35,7 +38,7 @@ class RobotSettings:
     def validate(self):
         if self.backend not in ('mock', 'nero'):
             raise ValueError('未知机械臂后端')
-        for name in ('open_width', 'close_width', 'gripper_force', 'move_timeout',
+        for name in ('open_width', 'close_width', 'gripper_force', 'gripper_close_speed', 'grip_timeout', 'move_timeout',
                      'recognize_timeout', 'release_timeout', 'joint_tolerance', 'stable_seconds'):
             value = float(getattr(self, name))
             if not math.isfinite(value):
@@ -43,12 +46,14 @@ class RobotSettings:
             setattr(self, name, value)
         if not 1 <= self.speed_percent <= 20:
             raise ValueError('本试验版速度比例须在 1–20%')
-        if not 0 <= self.close_width < self.open_width <= .1:
-            raise ValueError('夹爪宽度应为 0 ≤ 闭合 < 张开 ≤ 0.1 m')
+        if not .001 <= self.close_width < self.open_width <= .1:
+            raise ValueError('夹爪宽度应为 1 mm ≤ 闭合目标间距 < 张开 ≤ 100 mm；禁止闭合到零')
         if not 0 < self.gripper_force <= 3:
             raise ValueError('夹爪指令参数须在 0–3 N 内；需真机标定验证')
+        if not .001 <= self.gripper_close_speed <= .030:
+            raise ValueError('夹爪闭合限速须在 1–30 mm/s 内')
         if not all(0 < getattr(self, n) <= 60 for n in
-                   ('move_timeout', 'recognize_timeout', 'release_timeout')):
+                   ('grip_timeout', 'move_timeout', 'recognize_timeout', 'release_timeout')):
             raise ValueError('超时须在 0–60 秒内')
         if not 0 < self.joint_tolerance <= .1 or not .1 <= self.stable_seconds <= 3:
             raise ValueError('到位容差或稳定时间无效')

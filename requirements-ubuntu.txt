@@ -1,0 +1,4 @@
+# Ubuntu 24.04 / Python 3.12, CPU inference and browser UI.
+# The Windows-only CAN wheel is excluded by its environment marker.
+-r requirements-inference.txt
+-r requirements-robot.txt

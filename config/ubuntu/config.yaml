@@ -1,0 +1,11 @@
+# Ubuntu VBTS sensor profile. Device number may change after reconnecting.
+app:
+  robot_controls: true
+  title: "触象 · TouchSign | 原图识别预览"
+  native: false
+  show: true
+sensor:
+  preferred_camera_name: "VBTS"
+recognition:
+  model_path: "models/raw/best.onnx"
+  preview: true

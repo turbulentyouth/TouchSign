@@ -5,9 +5,10 @@ import time
 import unittest
 import selectors
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 from robot.settings import RobotSettings, SettingsStore, joints
 from robot.service import RobotService
-from robot.backend import Snapshot
+from robot.backend import ArmNeedsEnable, Snapshot
 
 
 class OfflineSelector(selectors.SelectSelector):
@@ -64,6 +65,59 @@ class CycleTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.2)
         self.assertEqual(self.s.completed, 1)
 
+    async def test_initial_brake_does_not_latch_fault_and_teaching_can_enable(self):
+        arm = self.s.arm
+        snapshot = arm.snapshot
+        arm.snapshot = Mock(side_effect=ArmNeedsEnable('等待使能'))
+        def enable():
+            arm.snapshot = snapshot
+        arm.enable = Mock(side_effect=enable)
+        await asyncio.sleep(.2)
+        self.assertEqual(self.s.phase, 'disabled')
+        self.assertFalse(self.s.stop_requested)
+        arm.enable.assert_not_called()
+        await self.s.teach(self.owner, True)
+        arm.enable.assert_called_once()
+        self.assertEqual(self.s.phase, 'teaching')
+
+    async def test_failed_enable_never_opens_gripper_or_enters_teach(self):
+        arm = self.s.arm
+        arm.enable = Mock(side_effect=TimeoutError('抱闸仍未释放'))
+        with self.assertLogs('robot.service', level='ERROR'), self.assertRaises(TimeoutError):
+            await self.s.teach(self.owner, True)
+        self.assertEqual(self.s.phase, 'fault')
+        self.assertEqual(arm.events, [])
+        with self.assertRaises(RuntimeError):
+            await self.s.teach(self.owner, True)
+
+    async def test_teaching_feedback_timeout_never_reports_success_or_saves_point(self):
+        arm = self.s.arm
+        def fail_after_command():
+            arm.teaching = True
+            raise TimeoutError('模式未确认')
+        arm.enter_teach = Mock(side_effect=fail_after_command)
+        with self.assertLogs('robot.service', level='ERROR'), self.assertRaises(TimeoutError):
+            await self.s.teach(self.owner, True)
+        self.assertEqual(self.s.phase, 'fault')
+        self.assertFalse(self.s.teaching)
+        self.assertFalse(self.s.busy)
+        self.assertIn('模式未确认', self.s.message)
+        with self.assertRaises(RuntimeError):
+            await self.s.save_point(self.owner, 'detect')
+        self.assertNotIn('hold', arm.events)
+
+    async def test_disconnect_releases_resources_when_hold_fails(self):
+        arm = self.s.arm
+        arm.hold = Mock(side_effect=RuntimeError('无法保持'))
+        with self.assertLogs('robot.service', level='WARNING'):
+            await asyncio.gather(self.s.disconnect(self.owner), self.s.disconnect(self.owner))
+        self.assertFalse(arm.connected)
+        self.assertIsNone(self.s.arm)
+        self.assertIsNone(self.s.monitor_task)
+        self.assertEqual(self.s.phase, 'disconnected')
+        self.assertIn('保持指令失败', self.s.message)
+        arm.hold.assert_called_once()
+
     async def test_timeout_releases_and_returns_without_fabricated_result(self):
         self.settings.recognize_timeout=.15
         await self.s.start(self.owner, ready=True, mock_key='timeout')
@@ -83,11 +137,72 @@ class CycleTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.15)
         await self.s.stop(self.owner)
         await task
-        self.assertEqual(self.s.phase,'fault')
+        self.assertEqual(self.s.phase,'stopped')
+        self.assertIn('收回已取消', self.s.message)
         self.assertEqual(self.s.completed,0)
         self.assertNotIn(('move',(0.,)*7),self.s.arm.events)
         with self.assertRaises(RuntimeError):
             self.s.start(self.owner,ready=True)
+        with self.assertRaises(RuntimeError):
+            await self.s.teach(self.owner, True)
+
+    async def test_stop_hold_failure_remains_a_fault(self):
+        self.s.arm.hold = Mock(side_effect=RuntimeError('反馈过期'))
+        with self.assertLogs('robot.service', level='ERROR'), self.assertRaises(RuntimeError):
+            await self.s.stop(self.owner)
+        self.assertEqual(self.s.phase, 'fault')
+        self.assertIn('保持当前位置失败', self.s.message)
+        self.s.arm.hold = Mock()
+        message = self.s.message
+        await self.s.stop(self.owner)
+        self.assertEqual(self.s.phase, 'fault')
+        self.assertEqual(self.s.message, message)
+
+    async def test_open_gripper_waits_for_contact_release_before_returning(self):
+        await self.run_contact_release_case(clear_contact=True)
+
+    async def test_open_gripper_with_contact_times_out_with_specific_reason(self):
+        with self.assertLogs('robot.service', level='ERROR'):
+            await self.run_contact_release_case(clear_contact=False)
+
+    async def run_contact_release_case(self, *, clear_contact):
+        # Use the real sensor-gating path with simulated arm feedback. Opening
+        # the gripper alone must not authorize the return move.
+        self.s._recognize = AsyncMock(return_value=('rat', None))
+        self.s._grip = AsyncMock()  # This case exercises release gating only.
+        release_seen = False
+        release_started = None
+        async def feed():
+            nonlocal release_seen, release_started
+            while True:
+                status = 'preview'
+                if self.s.phase == 'releasing':
+                    if release_started is None:
+                        release_started = time.monotonic()
+                    if time.monotonic() - release_started < .15:
+                        self.assertNotIn(('move', (0.,)*7), self.s.arm.events)
+                        if self.s.arm.width == self.settings.open_width:
+                            release_seen = True
+                    elif clear_contact:
+                        status = 'no_contact'
+                self.s.observe(SimpleNamespace(status=status), time.monotonic(), 7)
+                await asyncio.sleep(.02)
+        feeder = asyncio.create_task(feed())
+        try:
+            with patch.object(RobotService, 'mock', new_callable=PropertyMock, return_value=False):
+                await self.s.start(self.owner, ready=True, stream_id=7)
+            self.assertTrue(release_seen)
+            if clear_contact:
+                self.assertEqual(self.s.phase, 'complete')
+                self.assertIn(('move', (0.,)*7), self.s.arm.events)
+            else:
+                self.assertEqual(self.s.phase, 'fault')
+                self.assertIn('松开确认超时', self.s.message)
+                self.assertIn('尚未确认无接触', self.s.message)
+                self.assertNotIn(('move', (0.,)*7), self.s.arm.events)
+        finally:
+            feeder.cancel()
+            await asyncio.gather(feeder, return_exceptions=True)
 
     async def test_missing_points_sensor_and_other_window_rejected(self):
         with self.assertRaises(RuntimeError):
@@ -149,11 +264,42 @@ class CycleTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SettingsTests(unittest.TestCase):
+    def test_closing_speed_range_round_trips(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory)/'config.yaml')
+            for speed in (.001, .005, .010, .011, .020, .030):
+                with self.subTest(speed=speed):
+                    settings = RobotSettings(gripper_close_speed=speed)
+                    store.save(settings)
+                    self.assertEqual(store.load().gripper_close_speed, speed)
+
+    def test_legacy_step_is_ignored_without_changing_target_or_points(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory)/'config.yaml')
+            store.path.write_text('robot:\n  close_width: 0.0035\n  grip_step: 0.003\n'
+                                  '  points:\n    mock:\n      detect: [0,0,0,0,0,0,0]\n'
+                                  '      home: [1,1,1,1,1,1,1]\n', encoding='utf-8')
+            settings = store.load()
+            self.assertFalse(hasattr(settings, 'grip_step'))
+            self.assertEqual(settings.gripper_close_speed, .005)
+            self.assertEqual(settings.points, {'mock': {'detect':[0]*7, 'home':[1]*7}})
+            store.save(settings)
+            loaded = store.load()
+            self.assertEqual(loaded.gripper_close_speed, .005)
+            self.assertNotIn('grip_step', store.path.read_text())
+            self.assertEqual(loaded.close_width, .0035)
+            self.assertEqual(loaded.points, settings.points)
+
     def test_invalid_numbers_and_points(self):
         for q in ([0]*6,[0]*6+[float('nan')],[0]*6+[9]):
             with self.assertRaises(ValueError): joints(q)
         for kwargs in ({'open_width':.02,'close_width':.05},{'gripper_force':float('nan')},
-                       {'speed_percent':90},{'points':{'mock':{'via':[0]*7}}}):
+                       {'speed_percent':90},{'points':{'mock':{'via':[0]*7}}},
+                       {'close_width':0}, {'close_width':.0000001},
+                       {'gripper_close_speed':0}, {'gripper_close_speed':.000999},
+                       {'gripper_close_speed':.030001},
+                       {'gripper_close_speed':float('nan')}, {'gripper_close_speed':float('inf')},
+                       {'grip_timeout':0}, {'grip_timeout':float('inf')}):
             with self.assertRaises(ValueError): RobotSettings(**kwargs).validate()
 
     def test_simulated_points_are_not_hardware_points(self):

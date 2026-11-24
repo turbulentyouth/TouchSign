@@ -28,8 +28,12 @@ def get_service():
 
 
 async def shutdown_robot():
-    if _service and _service.owner is not None:
-        await _service.disconnect(_service.owner)
+    if _service:
+        try:
+            if _service.owner is not None:
+                await _service.disconnect(_service.owner)
+        finally:
+            _service.pool.shutdown(wait=True)
 
 
 class RobotPanel:
@@ -45,7 +49,7 @@ class RobotPanel:
             with ui.row().classes('items-center w-full gap-3'):
                 ui.label('NERO · 单次触觉检测').classes('text-lg font-bold')
                 self.mode = ui.select({'mock':'离线模拟（不控制硬件）','nero':'NERO 真机（未验证）'}, value='mock', label='设备模式').classes('w-64')
-                self.channel = ui.input('USB-CAN 通道', value=s.channel).classes('w-28')
+                self.channel = ui.input('CAN 通道（Ubuntu 填网口名）', value=s.channel).classes('w-64')
                 self.connect_button = ui.button('连接', on_click=lambda: self.dispatch(self.connect))
                 self.disconnect_button = ui.button('断开', on_click=lambda: self.dispatch(self.disconnect))
             self.real_ack = ui.checkbox('真机：已核对固件、夹爪及负载，确认直达路径无障碍；首次使用须低速验证', value=False)
@@ -61,10 +65,12 @@ class RobotPanel:
                 self.mock_key = ui.select({**{k:v.glyph for k,v in ZODIAC_BY_KEY.items()}, 'timeout':'模拟识别超时'}, value='rat', label='模拟触觉结果').classes('w-44')
             with ui.expansion('夹爪与速度设置（点位与参数同存应用配置）').classes('w-full'):
                 with ui.row():
-                    self.speed = ui.number('速度比例 %', value=s.speed_percent, min=1, max=20, step=1)
+                    self.speed = ui.number('机械臂速度比例 %', value=s.speed_percent, min=1, max=20, step=1)
                     self.open_width = ui.number('张开宽度 mm', value=s.open_width*1000, min=1,max=100)
-                    self.close_width = ui.number('压牌闭合目标 mm', value=s.close_width*1000,min=0,max=99)
+                    self.close_width = ui.number('闭合目标间距 mm', value=s.close_width*1000,min=1,max=99,step=.5)
+                    self.close_speed = ui.number('夹爪闭合限速 mm/s', value=s.gripper_close_speed*1000,min=1,max=30,step=1)
                     self.force = ui.number('夹爪指令 N（待真机核验）', value=s.gripper_force,min=.1,max=3,step=.1)
+                ui.label('闭合限速可设为 1–30 mm/s，默认 5 mm/s；夹爪到位并稳定后开始触觉检测，检测期间保持目标间距。').classes('text-sm')
             self.points_label = ui.label('检测点：未保存 · 收回点：未保存')
             self.status = ui.label('未连接')
         ui.timer(.15, self.refresh)
@@ -93,7 +99,9 @@ class RobotPanel:
         old = self.service.settings
         new = replace(old, backend=self.mode.value, channel=str(self.channel.value),
                       speed_percent=int(self.speed.value), open_width=float(self.open_width.value)/1000,
-                      close_width=float(self.close_width.value)/1000, gripper_force=float(self.force.value))
+                      close_width=float(self.close_width.value)/1000,
+                      gripper_close_speed=float(self.close_speed.value)/1000,
+                      gripper_force=float(self.force.value))
         new.validate()
         self.service.store.save(new)
         self.service.settings = new
@@ -126,7 +134,8 @@ class RobotPanel:
         await self.service.call('simulate_drag', joints(json.loads(self.drag_angles.value)))
 
     async def stop(self):
-        await self.service.stop(self)
+        await self.service.stop_and_return(self, stream_id=self.view._stream_serial,
+                                           ready_check=self.sensor_ready)
 
     async def detect(self):
         v = self.view
@@ -178,12 +187,17 @@ class RobotPanel:
         own = s.owner is self
         idle = own and not s.busy and not self.action_busy
         self.status.set_text(f'#{s.cycle_id} · {s.phase} · {s.message}')
+        if own and s.phase in ('preparing', 'approaching', 'gripping', 'recognizing', 'releasing',
+                               'returning', 'complete', 'stopped', 'fault'):
+            # Keep cycle progress visible when the robot settings are collapsed.
+            self.view.runtime_hint.text = s.message
         points = s.points if own else {}
         self.points_label.set_text(' · '.join(f'{label}：' + ('已保存' if key in points else '未保存') for key,label in [('detect','检测点'),('home','收回点')]))
         self.connect_button.set_enabled(s.owner is None and not self.action_busy)
-        self.disconnect_button.set_enabled(own and not self.action_busy)
-        self.stop_button.set_enabled(own)
-        self.teach_button.set_enabled(idle and s.phase in ('idle','complete'))
+        self.disconnect_button.set_enabled(own and (not self.action_busy or s.finishing))
+        self.stop_button.set_enabled(own and not s.finishing and 'home' in points
+                                     and not s.teaching and s.phase not in ('disabled', 'switching'))
+        self.teach_button.set_enabled(idle and s.phase in ('idle','disabled','complete'))
         self.end_teach.set_enabled(idle and s.teaching)
         self.detect_point.set_enabled(idle and s.phase == 'teaching')
         self.home_point.set_enabled(idle and s.phase == 'teaching')
@@ -194,7 +208,7 @@ class RobotPanel:
         self.real_ack.set_visibility(self.mode.value == 'nero')
         self.mock_controls.set_visibility(self.mode.value == 'mock')
         self.notice.set_text('离线模拟：不控制硬件，结果不计入识别记录' if self.mode.value=='mock' else '真机接口未实测：先验证重力补偿和直达路径，再运行压牌检测')
-        for control in (self.speed,self.open_width,self.close_width,self.force):
+        for control in (self.speed,self.open_width,self.close_width,self.close_speed,self.force):
             control.set_enabled(not s.busy and not s.teaching and not self.action_busy)
         for name in ('calibration_button','reload_button','speech_test_button'):
             element = getattr(self.view,name,None)

@@ -1,5 +1,5 @@
 # Locally repackaged, hash-verified upstream sources. See vendor/README.md.
 ./vendor/wheels/pyagxarm-1.0.0+touchsign.d90e234-py3-none-any.whl
-./vendor/wheels/python_can_agx_cando-0.1.0+touchsign.fbd76e5-py3-none-win_amd64.whl
+./vendor/wheels/python_can_agx_cando-0.1.0+touchsign.fbd76e5-py3-none-win_amd64.whl ; sys_platform == "win32"
 ./vendor/wheels/python_can-4.6.1-py3-none-any.whl
 ./vendor/wheels/wrapt-1.17.3-py3-none-any.whl

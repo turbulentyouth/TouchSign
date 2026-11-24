@@ -42,6 +42,7 @@ class AppConfig:
 
 @dataclass(frozen=True, slots=True)
 class SensorConfig:
+    preferred_camera_name: str = ''
     exposure_ms: float = 8.0
     gain: float = 1.2
     gel_thickness_mm: float = 0.1

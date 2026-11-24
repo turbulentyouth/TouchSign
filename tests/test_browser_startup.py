@@ -14,6 +14,7 @@ class BrowserStartupTests(unittest.TestCase):
     def test_browser_path_excludes_bundle_and_keeps_system_paths(self):
         from gui.browser_launcher import browser_environment
         with patch.object(sys, '_MEIPASS', 'C:/bundle/_MEI123', create=True), \
+                patch('os.pathsep', ';'), \
                 patch.dict(os.environ, {'PATH': 'C:/Windows;C:/bundle/_MEI123;C:/bundle/_MEI123/cv2;C:/other'}):
             self.assertEqual(browser_environment()['PATH'], 'C:/Windows;C:/other')
 
@@ -26,7 +27,8 @@ class BrowserStartupTests(unittest.TestCase):
             return 9
         kernel.GetDllDirectoryW.side_effect = get_dir
         kernel.SetDllDirectoryW.return_value = True
-        with patch.object(sys, 'frozen', True, create=True), patch('ctypes.WinDLL', return_value=kernel):
+        with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'platform', 'win32'), \
+                patch('ctypes.WinDLL', return_value=kernel, create=True):
             with self.assertRaises(OSError):
                 with external_dll_search():
                     raise OSError('child failed')
@@ -35,6 +37,7 @@ class BrowserStartupTests(unittest.TestCase):
     def test_failed_browser_process_tries_next_candidate_with_own_profile(self):
         from gui.browser_launcher import open_browser
         with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(sys, 'platform', 'win32'), \
                 patch('gui.browser_launcher.browser_candidates', return_value=iter([Path('C:/Edge.exe'), Path('C:/Chrome.exe')])), \
                 patch('gui.browser_launcher.user_data_root', return_value=Path(tmp)), \
                 patch('gui.browser_launcher.external_dll_search'), \

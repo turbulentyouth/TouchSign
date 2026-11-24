@@ -135,12 +135,14 @@ def _launch() -> None:
                 sys.stderr.flush()
             except OSError:
                 pass
-        import ctypes
-
         message = f'TouchSign 启动失败\n\n{exc}'
         if log_path is not None:
             message += f'\n\n诊断日志\n{log_path}'
-        ctypes.windll.user32.MessageBoxW(None, message, 'TouchSign', 0x10)
+        if sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, 'TouchSign', 0x10)
+        elif sys.stderr is not None:
+            print(message, file=sys.stderr)
         raise SystemExit(1) from None
 
 

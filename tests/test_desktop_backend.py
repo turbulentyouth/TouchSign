@@ -4,12 +4,13 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import numpy as np
 from core.config import PROJECT_ROOT, load_config
 from gui.desktop_backend import DesktopBackend
 from robot.settings import SettingsStore
+from robot.service import RobotService
 
 
 class FakeCamera:
@@ -94,6 +95,49 @@ class DesktopBackendTests(unittest.TestCase):
         self.assertTrue(all(not t.is_alive() for t in self.backend.service.pool._threads))
         self.assertTrue(all(not t.is_alive() for t in self.backend._vision._threads))
         self.assertTrue(any(e['type']=='closed' for e in self.events))
+
+    def test_stop_command_opens_and_returns_instead_of_only_holding(self):
+        self.teach_points()
+        cycle = self.backend.handle({'type':'command', 'name':'detect', 'key':'rat'})
+        self.wait_until(lambda: self.backend.service.phase == 'recognizing')
+        self.backend.service.arm.events.clear()
+        self.command('stop')
+        cycle.result(timeout=3)
+        service = self.backend.service
+        self.assertEqual(service.phase, 'complete')
+        self.assertEqual(service.completed, 0)
+        self.assertIn('已张开并返回收回点', service.message)
+        self.assertEqual(service.arm.events[-2:], [('gripper', .06), ('move', (0.,)*7)])
+        self.assertFalse(any(e['type']=='result' for e in self.events))
+
+    def test_preview_continues_but_tactile_processing_waits_for_arrival(self):
+        service = self.backend.service
+        process = Mock(return_value=None)
+        with patch.object(RobotService, 'mock', new_callable=PropertyMock, return_value=False), \
+                patch.object(self.backend.engine, 'process', process):
+            service.phase = 'gripping'
+            frames = sum(e['type']=='frame' for e in self.events)
+            self.wait_until(lambda: sum(e['type']=='frame' for e in self.events) >= frames+3)
+            process.assert_not_called()
+            service.recognition_start = time.monotonic()
+            service.phase = 'recognizing'
+            self.wait_until(lambda: process.call_count > 0)
+            for call in process.call_args_list:
+                self.assertGreater(call.kwargs['timestamp'], service.recognition_start)
+            count = process.call_count
+            service.phase = 'releasing'
+            self.wait_until(lambda: process.call_count > count)
+            service.phase = 'idle'
+
+    def test_closing_speed_setting_is_saved_and_reported(self):
+        self.assertEqual(self.backend.service.settings.gripper_close_speed, .005)
+        for speed in (.002, .030):
+            with self.subTest(speed=speed):
+                self.command('settings', values={'gripper_close_speed':speed})
+                self.assertEqual(self.backend.service.settings.gripper_close_speed, speed)
+                self.assertEqual(self.backend.store.load().gripper_close_speed, speed)
+                self.wait_until(lambda: any(e['type']=='status' and
+                               e['settings'].get('gripper_close_speed')==speed for e in self.events))
 
 
 if __name__ == '__main__':

@@ -4,6 +4,10 @@ import time
 from robot.settings import joints
 
 
+class ArmNeedsEnable(RuntimeError):
+    """Initial brake-closed state, before this connection has enabled the arm."""
+
+
 @dataclass(frozen=True)
 class Snapshot:
     q: tuple
@@ -56,6 +60,12 @@ class MockArm:
             raise RuntimeError('请先开始示教')
         self.q = self._target = joints(q)
 
+    def prepare_move(self, q):
+        if self.teaching:
+            raise RuntimeError('示教中不能自动运动')
+        self.snapshot()
+        joints(q)
+
     def move(self, q):
         if self.teaching:
             raise RuntimeError('示教中不能自动运动')
@@ -74,6 +84,11 @@ class MockArm:
         self._target = self.q
         self.teaching = False
         self.events.append('hold')
+
+    def hold_gripper(self):
+        width = self.snapshot().width
+        self.events.append(('hold_gripper', width))
+        return width
 
     def disconnect(self):
         self.connected = False

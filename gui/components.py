@@ -199,6 +199,8 @@ class TopBar:
         self.select.props(remove='disabled')
         self.select_shell.classes(remove='is-empty')
         with self.select:
+            if selected is None:
+                Text('option', '请选择传感器').props('value="" disabled selected')
             for camera in cameras:
                 option = Text('option', camera.short_label)
                 if camera.available:
@@ -207,8 +209,7 @@ class TopBar:
                         option.props('selected')
                 else:
                     option.props(f'value="__unavailable_{camera.index}" disabled')
-        if selected is not None:
-            self.select.props(f'value="{selected}"')
+        self.select.props(f'value="{selected if selected is not None else ""}"')
         self.select.props(
             f'title="{attr("；".join(camera.full_label for camera in cameras))}"'
         )
