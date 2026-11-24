@@ -1,3 +1,5 @@
+> 当前独立内嵌网页桌面版：本机运行 dist/TouchSign-Desktop.lnk。最终 EXE 被 Windows 应用控制拦截，运行验收未通过。没有外部浏览器或本地 HTTP 服务。构建使用 tools/build_desktop.ps1，详见 [桌面版说明](docs/embedded-desktop.md)。旧浏览器方案保留用于历史参考。
+
 # TouchSign · 触象
 
 > NERO 新分支预览版：按钮触发单轮压印识别、原位松开再收回，支持双点拖动示教及离线模拟。使用步骤和真机验证边界见 [NERO 预览版说明](docs/nero-preview.md)。
