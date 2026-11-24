@@ -10,12 +10,14 @@ class BrowserStartupTests(unittest.TestCase):
     def test_release_opens_browser_without_native_window(self):
         config = load_config(PROJECT_ROOT / 'config/raw/config.yaml')
         with patch('gui.app.register_pages'), patch('gui.app.ui.run') as run, \
+                patch('gui.browser_launcher.register_browser_launch') as launch, \
                 patch('nicegui.native.find_open_port', return_value=8123):
             run_app(config)
         kwargs = run.call_args.kwargs
         self.assertFalse(kwargs['native'])
         self.assertIsNone(kwargs['window_size'])
-        self.assertTrue(kwargs['show'])
+        self.assertFalse(kwargs['show'])
+        self.assertEqual(launch.call_args.args[1], 'http://127.0.0.1:8123/')
         self.assertEqual(kwargs['host'], '127.0.0.1')
         self.assertEqual(kwargs['port'], 8123)
 

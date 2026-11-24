@@ -3091,3 +3091,18 @@ body { background: radial-gradient(ellipse at 15% 0%, #152b43 0%, #080f1b 65%); 
 @media (min-width: 1181px) and (max-height: 900px) {
   .app.runtime-app { grid-template-rows: 74px auto minmax(0, 1fr) auto 18px; }
 }
+
+/* Settings occupy their own auto-sized row; never squeeze or clip teaching controls. */
+body:has(.runtime-app) { overflow-y: auto; }
+.app.runtime-app { height: auto; min-height: 100vh; grid-template-rows: auto auto minmax(540px, 1fr) auto auto; }
+.app.runtime-app.robot-settings-open { grid-template-rows: auto auto auto minmax(540px, 1fr) auto auto; }
+.runtime-controls { flex-wrap: wrap; }
+.runtime-controls .q-btn { min-height: 34px; border-radius: 5px; font-size: 12px; font-weight: 700; }
+.runtime-controls .runtime-detect { background: #d4ad5e !important; color: #172124 !important; border: 1px solid #ead197; }
+.runtime-controls .runtime-exit { background: #ad3434 !important; color: #fff !important; border: 1px solid #e08275; }
+.runtime-controls .runtime-stop { background: #48252a !important; color: #ffc8bb !important; border: 1px solid #a35353; }
+.runtime-controls .runtime-settings-toggle { color: #dfc37f !important; border: 1px solid #71613f; }
+.runtime-model-status { flex: 1 1 230px; }
+.robot-settings { min-width: 0; height: auto; }
+.robot-settings .robot-panel { height: auto; max-height: none; overflow: visible; }
+.robot-settings .q-field { max-width: 100%; }

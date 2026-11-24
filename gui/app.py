@@ -82,7 +82,10 @@ class TouchSignView:
             self._build_runtime_controls()
             if config.app.robot_controls:
                 from gui.robot_panel import RobotPanel
-                self.robot_panel = RobotPanel(self)
+                self.robot_settings = element('div', 'robot-settings')
+                with self.robot_settings:
+                    self.robot_panel = RobotPanel(self)
+                self.robot_settings.set_visibility(False)
             with element('main', 'workspace'):
                 self.sensor = SensorPanel(config.sensor, PLACEHOLDER_URL, self.contact)
                 self.result = ResultPanel(config.recognition.confidence_threshold,
@@ -105,12 +108,20 @@ class TouchSignView:
             self.sensor.show_placeholder('未检测到可用传感器，请连接设备后刷新')
 
     def _build_runtime_controls(self) -> None:
-        with element('div', 'runtime-controls'):
+        self.runtime_controls = element('div', 'runtime-controls')
+        with self.runtime_controls:
             self.calibration_button = element('button', 'runtime-button').props(
                 'type="button" title="先移开所有物体，再采集稳定空载基线"')
             with self.calibration_button:
                 self.calibration_text = Text('span', '空载校准')
             self.calibration_button.on('click', self._calibrate)
+            if self.config.app.robot_controls:
+                self.detect_button = ui.button('检测（运行一轮）', on_click=self._detect_robot).classes('runtime-detect').props('no-caps')
+                self.detect_button.disable()
+                self.robot_stop_button = ui.button('停止本轮', on_click=self._stop_robot).classes('runtime-stop').props('no-caps')
+                self.robot_stop_button.disable()
+                self.robot_settings_toggle = ui.button('展开机械臂设置', on_click=self._toggle_robot_settings).classes('runtime-settings-toggle').props('flat no-caps aria-expanded=false')
+            self.exit_button = ui.button('退出程序', on_click=app.shutdown, icon='power_settings_new').classes('runtime-exit').props('no-caps')
             self.preview_button = element('button', 'runtime-button').props('type="button"')
             with self.preview_button:
                 self.preview_text = Text('span', self._preview_label)
@@ -142,6 +153,22 @@ class TouchSignView:
             button.on('click', self._show_model_settings)
             self.model_status = Text('span', '', 'runtime-model-status')
             self.runtime_hint = Text('span', '校准前请移开所有物体', 'runtime-hint')
+
+    async def _detect_robot(self) -> None:
+        if self.robot_panel is not None:
+            await self.robot_panel.dispatch(self.robot_panel.detect)
+
+    async def _stop_robot(self) -> None:
+        if self.robot_panel is not None:
+            await self.robot_panel.dispatch(self.robot_panel.stop)
+
+    def _toggle_robot_settings(self) -> None:
+        visible = not self.robot_settings.visible
+        self.robot_settings.set_visibility(visible)
+        self.app.classes(add='robot-settings-open' if visible else None,
+                         remove=None if visible else 'robot-settings-open')
+        self.robot_settings_toggle.set_text('收起机械臂设置' if visible else '展开机械臂设置')
+        self.robot_settings_toggle.props(f'aria-expanded={str(visible).lower()}')
 
     def _update_model_status(self) -> None:
         self.model_status.text = self.engine.model_status
@@ -570,9 +597,6 @@ def register_pages(config: Config) -> None:
              dark=True)
     def index() -> None:
         apply_theme()
-        if not config.app.native and config.app.show:
-            with ui.row().classes('w-full justify-end'):
-                ui.button('退出程序', on_click=app.shutdown, icon='power_settings_new').props('flat dense')
         TouchSignView(config)
 
 
@@ -588,9 +612,15 @@ def run_app(config: Config, *, host: str | None = None, port: int | None = None,
         run_port = find_open_port()
     else:
         run_port = port if port is not None else (None if use_native else config.app.port)
+    if not use_native and show_browser:
+        from gui.browser_launcher import register_browser_launch
+        browser_host = host or config.app.host
+        if browser_host == '0.0.0.0':
+            browser_host = '127.0.0.1'
+        register_browser_launch(app, f'http://{browser_host}:{run_port}/')
     ui.run(host=host or config.app.host, port=run_port, title=config.app.title,
            favicon=str(favicon) if favicon and favicon.is_file() else None, dark=True,
-           show=show_browser,
+           show=False,  # Explicit launcher logs results and detects missing UI connections.
            reload=config.app.reload if reload is None else reload, native=use_native,
            window_size=(config.app.window_width, config.app.window_height) if use_native else None,
            reconnect_timeout=10.0)

@@ -38,6 +38,8 @@ class RobotPanel:
         self.service = get_service()
         self.result_latched = False
         self.action_busy = False
+        self.detect_button = view.detect_button
+        self.stop_button = view.robot_stop_button
         s = self.service.settings
         with ui.card().classes('robot-panel w-full').style('background:#111923;color:#e5dfd3;border:1px solid #a68a4b; padding:12px 18px'):
             with ui.row().classes('items-center w-full gap-3'):
@@ -46,7 +48,6 @@ class RobotPanel:
                 self.channel = ui.input('USB-CAN 通道', value=s.channel).classes('w-28')
                 self.connect_button = ui.button('连接', on_click=lambda: self.dispatch(self.connect))
                 self.disconnect_button = ui.button('断开', on_click=lambda: self.dispatch(self.disconnect))
-                self.stop_button = ui.button('停止本轮', on_click=lambda: self.dispatch(self.stop), color='red')
             self.real_ack = ui.checkbox('真机：已核对固件、夹爪及负载，确认直达路径无障碍；首次使用须低速验证', value=False)
             self.notice = ui.label('离线模拟：没有真实机械臂或传感器；模拟结果不计入识别记录').classes('text-amber-400')
             with ui.row().classes('items-center gap-2'):
@@ -54,7 +55,6 @@ class RobotPanel:
                 self.detect_point = ui.button('保存检测点', on_click=lambda: self.dispatch(lambda: self.save_point('detect')))
                 self.home_point = ui.button('保存收回点', on_click=lambda: self.dispatch(lambda: self.save_point('home')))
                 self.end_teach = ui.button('结束示教 / 保持', on_click=lambda: self.dispatch(self.exit_teach))
-                self.detect_button = ui.button('检测（运行一轮）', on_click=lambda: self.dispatch(self.detect), color='amber-8')
             with ui.row().classes('items-center gap-2') as self.mock_controls:
                 self.drag_angles = ui.input('模拟拖动：七关节角 rad', value='[0, 0.2, -0.2, 0, 0.1, 0, 0]').classes('w-96')
                 self.drag_button = ui.button('应用模拟姿态', on_click=lambda: self.dispatch(self.drag))
