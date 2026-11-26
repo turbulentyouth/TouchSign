@@ -93,6 +93,7 @@ class RecognitionConfig:
     demo_auto_cycle_seconds: float = 0.0
     initial_zodiac: str = 'rat'
     preview: bool = False
+    confirm_preview: bool = False
 
     def __post_init__(self) -> None:
         if not 0 < self.confidence_threshold <= 1:

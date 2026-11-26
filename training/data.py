@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from core.inference import CLASS_NAMES, INPUT_KIND, RAW_INPUT_KIND
+from core.manual_collection import FORMAT as MANUAL_FORMAT
 
 
 def read_image(path: Path) -> np.ndarray:
@@ -21,23 +22,63 @@ def read_image(path: Path) -> np.ndarray:
     return image
 
 
-def read_samples(root: str | Path, *, input_kind: str = INPUT_KIND) -> list[dict]:
+def _manual_row(row: dict, manifest: Path, root: Path, grouping: str) -> dict:
+    """Normalize manual paths without inventing a baseline or contact measurement."""
+    if row.get('format') != MANUAL_FORMAT or row.get('label_source') != 'manual':
+        raise ValueError('手工采集格式或标签来源无效')
+    if row.get('rotation_degrees') != 180:
+        raise ValueError('手工图像必须已按 180° 保存，训练不会再次旋转')
+    image = (manifest.parent / row['image']).resolve()
+    if image.parent != (manifest.parent / row['label']).resolve():
+        raise ValueError('手工图像目录与标签不一致')
+    relative = image.relative_to(root).as_posix()
+    # A frame is an independent press only when the operator explicitly says so.
+    # Unloaded frames from one session remain together, even in frame mode.
+    episode = f'manual-{image.stem}' if grouping == 'frame' and row['label'] != 'no_contact' else 'manual-session'
+    correction = row.get('correction')
+    if correction is not None:
+        from core.corrections import CORRECTION_FORMAT
+        if (not isinstance(correction, dict) or correction.get('format') != CORRECTION_FORMAT
+                or not isinstance(correction.get('episode_id'), str) or not correction['episode_id']):
+            raise ValueError('纠错样本缺少有效按压分组')
+        if grouping == 'frame':
+            # Several saved positions during one held press are still one group.
+            episode = 'correction-' + correction['episode_id']
+    return {**row, 'image': relative, 'raw_image': relative,
+            'session_id': manifest.parent.name, 'episode_id': episode, 'input_kind': RAW_INPUT_KIND}
+
+
+def read_samples(root: str | Path, *, input_kind: str = INPUT_KIND,
+                 manual_grouping: str = 'session') -> list[dict]:
     """Keep the collection metadata; path and sha256 identify the selected model input."""
     if input_kind not in (INPUT_KIND, RAW_INPUT_KIND):
         raise ValueError(f'不支持的模型输入：{input_kind}')
+    if manual_grouping not in ('session', 'frame'):
+        raise ValueError('manual_grouping 必须为 session 或 frame')
     image_field = 'raw_image' if input_kind == RAW_INPUT_KIND else 'image'
     root = Path(root).resolve()
-    manifests = sorted(root.glob('*/manifest.jsonl'))
+    manifests = sorted([*root.glob('*/manifest.jsonl'), *root.glob('*/samples.jsonl')])
     if not manifests:
-        raise ValueError(f'没有采集数据：{root}。请先运行 collect.py，采集十二生肖、未知物体和无接触数据。')
+        raise ValueError(f'没有采集数据：{root}。请先采集十二生肖、未知物体和无接触数据。')
     samples, paths, hashes = [], set(), {}
     for manifest in manifests:
+        manual = manifest.name == 'samples.jsonl'
+        if manual:
+            if input_kind != RAW_INPUT_KIND:
+                raise ValueError('手工采集只有原图，请使用 --input raw')
+            metadata = json.loads((manifest.parent / 'session.json').read_text(encoding='utf-8'))
+            if (metadata.get('format') != MANUAL_FORMAT or metadata.get('rotation_degrees') != 180
+                    or metadata.get('input_kind') != RAW_INPUT_KIND
+                    or metadata.get('session_id') != manifest.parent.name):
+                raise ValueError(f'{manifest.parent}: 手工会话信息无效')
         cached_baseline_path = baseline = None
         for line_no, line in enumerate(manifest.read_text(encoding='utf-8').splitlines(), 1):
             if not line.strip():
                 continue
             try:
                 row = json.loads(line)
+                if manual:
+                    row = _manual_row(row, manifest, root, manual_grouping)
                 if input_kind == RAW_INPUT_KIND and not row.get('raw_image'):
                     raise ValueError('清单缺少原图路径 raw_image')
                 image = (root / row[image_field]).resolve()
@@ -46,15 +87,17 @@ def read_samples(root: str | Path, *, input_kind: str = INPUT_KIND) -> list[dict
                     raise ValueError('图像缺失或路径越界')
                 if session != manifest.parent.name or label not in CLASS_NAMES or not row.get('episode_id'):
                     raise ValueError('session_id、label 或 episode_id 无效')
-                if row.get('input_kind') != INPUT_KIND:
+                if not manual and row.get('input_kind') != INPUT_KIND:
                     raise ValueError('采集清单格式不匹配，请用新版采集界面采集')
-                if row.get('contact_detected') is not (label != 'no_contact'):
+                if not manual and row.get('contact_detected') is not (label != 'no_contact'):
                     raise ValueError('接触标注不符合类别：生肖和 unknown 必须确有接触，no_contact 必须无接触')
                 if image in paths:
                     raise ValueError('清单包含重复图像路径')
-                if input_kind == RAW_INPUT_KIND and row.get('image') and image == (root / row['image']).resolve():
+                if not manual and input_kind == RAW_INPUT_KIND and row.get('image') and image == (root / row['image']).resolve():
                     raise ValueError('raw_image 与差分图指向同一文件，请核对原图记录')
                 frame = read_image(image)
+                if manual and list(frame.shape) != row.get('frame_shape'):
+                    raise ValueError('手工图像尺寸与采集记录不一致')
                 # Hash decoded pixels, not PNG bytes: changing compression or
                 # adding metadata must not bypass the cross-session leak check.
                 digest = hashlib.sha256(
@@ -95,9 +138,10 @@ def _validation_groups(groups: dict, *, seed: int, minimum: int, allow_train_onl
     totals = counts.sum(axis=0)
     support = (counts > 0).sum(axis=0)
     eligible = support >= 2
-    if not eligible.any() or (not allow_train_only and not eligible.all()):
+    present = totals > 0
+    if not eligible.any() or (not allow_train_only and not (eligible | ~present).all()):
         return None
-    if (totals < minimum * (1 + eligible.astype(int))).any():
+    if (totals < minimum * (present.astype(int) + eligible.astype(int))).any():
         return None
 
     # A class observed in just one episode must stay in training. Redistribute
@@ -113,7 +157,7 @@ def _validation_groups(groups: dict, *, seed: int, minimum: int, allow_train_onl
 
     def score(val):
         shortfall = (np.maximum(minimum * eligible - val, 0).sum()
-                     + np.maximum(minimum - (totals - val), 0).sum())
+                     + np.maximum(minimum * present - (totals - val), 0).sum())
         return shortfall, np.abs(val - targets).sum(), abs(val.sum() - goal)
 
     rng = random.Random(seed)
@@ -155,11 +199,13 @@ def _validation_groups(groups: dict, *, seed: int, minimum: int, allow_train_onl
     return {keys[i] for i in best_indices}
 
 
-def _grouped_split(samples: list[dict], *, seed: int, min_per_class: int):
+def _grouped_split(samples: list[dict], *, seed: int, min_per_class: int,
+                   allow_missing_unknown: bool = False):
     if min_per_class < 1:
         raise ValueError('每类的最少图像数必须为正数')
     totals = Counter(s['label'] for s in samples)
-    missing = [label for label in CLASS_NAMES if totals[label] < min_per_class]
+    missing = [label for label in CLASS_NAMES if totals[label] < min_per_class
+               and not (allow_missing_unknown and label == 'unknown' and totals[label] == 0)]
     if missing:
         raise ValueError(f'训练集每类至少需要 {min_per_class} 张有效图像，数据不足：{missing}')
     for grouping in ('session', 'episode'):
@@ -184,17 +230,83 @@ def split_sessions(samples: list[dict], *, seed: int = 42, min_per_class: int = 
     return split
 
 
+def _reference_split(samples: list[dict], reference: Path, *, seed: int,
+                     min_per_class: int, input_kind: str):
+    """Keep previously held-out images out of incremental training, by pixel hash.
+
+    New frames in an existing episode inherit that episode's assignment. New
+    episodes are split as whole groups; sparse classes may exceed the 20% target
+    so that a new acquisition setup has validation coverage wherever possible.
+    """
+    reference = reference.resolve()
+    metadata = json.loads((reference / 'split.json').read_text(encoding='utf-8'))
+    if metadata['input_kind'] != input_kind:
+        raise ValueError('参考划分的图像类型与本次训练不同')
+    by_hash = {row['sha256']: row for row in samples}
+    known, assignments = {}, {}
+    for name in ('train', 'val'):
+        for line in (reference / name / 'index.jsonl').read_text(encoding='utf-8').splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            digest = row['sha256']
+            if digest in known:
+                raise ValueError('参考划分包含重复图像或训练/验证交叉')
+            if digest not in by_hash:
+                raise ValueError(f'参考划分中的图像已缺失；请核对数据后再续训：{digest}')
+            sample = by_hash[digest]
+            if row['label'] != sample['label']:
+                raise ValueError('参考划分中的标签已改变，不能直接沿用旧权重续训')
+            key = sample['session_id'], sample['episode_id']
+            if key in assignments and assignments[key] != name:
+                raise ValueError('参考划分将同一次按压分到了训练和验证两侧')
+            known[digest] = assignments[key] = name
+    if set(known.values()) != {'train', 'val'}:
+        raise ValueError('参考划分必须同时包含训练和验证样本')
+    new_groups = defaultdict(list)
+    for row in samples:
+        key = row['session_id'], row['episode_id']
+        if key not in assignments:
+            new_groups[key].append(row)
+    validation = (_validation_groups(new_groups, seed=seed, minimum=min_per_class,
+                                    allow_train_only=True) if new_groups else None)
+    assignments.update({key: 'val' if key in (validation or set()) else 'train'
+                        for key in new_groups})
+    split = {'train': [], 'val': []}
+    for row in samples:
+        split[assignments[row['session_id'], row['episode_id']]].append(row)
+    details = {'path': str(reference),
+               'retained': dict(Counter(known.values())),
+               'added': {name: sum(row['sha256'] not in known for row in rows)
+                         for name, rows in split.items()}}
+    return split, details
+
+
 def prepare_dataset(raw: str | Path, destination: str | Path, *, seed: int = 42,
-                    min_per_class: int = 1, input_kind: str = INPUT_KIND) -> tuple[dict, dict]:
+                    min_per_class: int = 1, input_kind: str = INPUT_KIND,
+                    manual_grouping: str = 'session', allow_missing_unknown: bool = False,
+                    reference_split: str | Path | None = None) -> tuple[dict, dict]:
     destination = Path(destination).resolve()
     if destination.exists() and any(destination.iterdir()):
         raise ValueError(f'输出目录非空，避免混入旧数据：{destination}')
-    samples = read_samples(raw, input_kind=input_kind)
-    split, grouping = _grouped_split(samples, seed=seed, min_per_class=min_per_class)
+    if allow_missing_unknown and input_kind != RAW_INPUT_KIND:
+        raise ValueError('缺少 unknown 的试训仅支持原图模式')
+    samples = read_samples(raw, input_kind=input_kind, manual_grouping=manual_grouping)
+    split, grouping = _grouped_split(samples, seed=seed, min_per_class=min_per_class,
+                                     allow_missing_unknown=allow_missing_unknown)
+    reference_details = None
+    if reference_split is not None:
+        split, reference_details = _reference_split(samples, Path(reference_split), seed=seed,
+                                                    min_per_class=min_per_class, input_kind=input_kind)
+        grouping = 'reference+episode'
     report = {'seed': seed, 'grouping': grouping, 'input_kind': input_kind,
+              'manual_grouping': manual_grouping if any(s.get('format') == MANUAL_FORMAT for s in samples) else None,
+              'missing_training_classes': sorted(set(CLASS_NAMES) - {s['label'] for s in split['train']}),
               'target_fractions': {'train': 0.8, 'val': 0.2},
               'missing_validation_classes': sorted(set(CLASS_NAMES) - {s['label'] for s in split['val']}),
               'synthetic': any(s.get('synthetic', False) for s in samples), 'splits': {}}
+    if reference_details is not None:
+        report['reference_split'] = reference_details
     for name, rows in split.items():
         for label in CLASS_NAMES:
             (destination / name / label).mkdir(parents=True, exist_ok=True)
@@ -207,6 +319,11 @@ def prepare_dataset(raw: str | Path, destination: str | Path, *, seed: int = 42,
                 raise ValueError(f'无法编码 {row["path"]}')
             encoded.tofile(target)
             copied.append({**row, 'path': target})
+        (destination / name / 'index.jsonl').write_text(''.join(
+            json.dumps({**row, 'source_path': str(row['path']),
+                        'prepared_path': (Path(name) / row['label'] / (row['sha256'] + '.png')).as_posix()},
+                       ensure_ascii=False, default=str) + '\n' for row in rows
+        ), encoding='utf-8')
         split[name] = copied
         counts = Counter(s['label'] for s in rows)
         report['splits'][name] = {'sessions': sorted({s['session_id'] for s in rows}),

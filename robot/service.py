@@ -6,9 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from robot.backend import ArmNeedsEnable, MockArm
 from robot.settings import joints
+from core.rejection import PREVIEW_CONFIRM_FRAMES, PREVIEW_CONFIRM_SECONDS
 
 LOGGER = logging.getLogger(__name__)
-
 
 class Stopped(Exception):
     pass
@@ -27,6 +27,7 @@ class RobotService:
         self.completed = 0
         self.result = None
         self.recognition_start = 0.
+        self.recognition_confidence_threshold = .5
         self.observation = None
         self.ready_check = None
         self.stop_requested = False
@@ -57,6 +58,8 @@ class RobotService:
         self.observation = None
         self.ready_check = None
         self._cycle_stream_id = 0
+        self.phase, self.message = 'connecting', f'正在连接 {self.settings.backend}：{self.settings.channel}'
+        LOGGER.info('机械臂连接开始：backend=%s, channel=%s', self.settings.backend, self.settings.channel)
         try:
             self.settings.validate()
             if self.settings.backend == 'mock':
@@ -66,11 +69,18 @@ class RobotService:
                 self.arm = NeroArm(self.settings)
             await self.call('connect')
             self.phase, self.message = 'idle', '模拟设备已连接' if self.mock else 'NERO 已连接；未自动使能'
+            LOGGER.info('机械臂连接成功：backend=%s, channel=%s', self.settings.backend, self.settings.channel)
             self.monitor_task = asyncio.create_task(self._monitor())
-        except Exception:
-            if self.arm:
-                await self.call('disconnect')
-            self.owner, self.arm = None, None
+        except Exception as exc:
+            self.phase, self.message = 'disconnected', f'连接失败：{exc}'
+            LOGGER.exception('机械臂连接失败：backend=%s, channel=%s', self.settings.backend, self.settings.channel)
+            try:
+                if self.arm:
+                    await self.call('disconnect')
+            except Exception:
+                LOGGER.exception('连接失败后关闭机械臂通信异常')
+            finally:
+                self.owner, self.arm = None, None
             raise
         finally:
             self.busy = False
@@ -160,7 +170,8 @@ class RobotService:
     def observe(self, state, timestamp, stream_id):
         self.observation = (state, timestamp, stream_id)
 
-    def start(self, owner, *, ready, stream_id=0, mock_key='rat', on_result=None, ready_check=None):
+    def start(self, owner, *, ready, stream_id=0, mock_key='rat', on_result=None, ready_check=None,
+              confidence_threshold=.5):
         self.require_owner(owner)
         if self.busy or self._disconnect_lock.locked() or self.teaching or self.phase not in ('idle', 'complete'):
             raise RuntimeError('请结束示教，并等待当前一轮结束')
@@ -168,7 +179,10 @@ class RobotService:
             raise RuntimeError('请先保存检测点和收回点')
         if not ready:
             raise RuntimeError('传感器、模型或空载校准尚未就绪')
+        if not math.isfinite(confidence_threshold) or not 0 < confidence_threshold <= 1:
+            raise ValueError('识别置信度门槛必须在 (0, 1]')
         self.settings.validate()
+        self.recognition_confidence_threshold = confidence_threshold
         self.busy = True  # Set synchronously: double clicks cannot queue a cycle.
         self.stop_requested = False
         self.result = None
@@ -177,7 +191,8 @@ class RobotService:
         self._cycle_stream_id = stream_id
         self.cycle_id += 1
         self.phase, self.message = 'preparing', '开始单次检测'
-        LOGGER.info('检测开始：cycle=%s, channel=%s', self.cycle_id, self.settings.channel)
+        LOGGER.info('检测开始：cycle=%s, channel=%s, 置信度门槛=%.0f%%',
+                    self.cycle_id, self.settings.channel, 100*self.recognition_confidence_threshold)
         self.task = asyncio.create_task(self._cycle(dict(self.points), stream_id, mock_key, on_result))
         return self.task
 
@@ -315,7 +330,7 @@ class RobotService:
     async def _recognize(self, stream_id, mock_key):
         from core.zodiac import ZODIAC_BY_KEY
         self.recognition_start = time.monotonic()
-        candidate, since, last_ts = None, 0., 0.
+        candidate, since, last_ts, count = None, 0., 0., 0
         while time.monotonic()-self.recognition_start < self.settings.recognize_timeout:
             if self.stop_requested:
                 raise Stopped('已请求停止')
@@ -332,16 +347,37 @@ class RobotService:
                     state, ts = obs
                     p = state.prediction
                     if ts > self.recognition_start and ts > last_ts:
+                        if ts-last_ts > .5:
+                            candidate, count = None, 0
                         last_ts = ts
-                        key = p.key if (p and p.accepted and state.contact.active and state.contact.stable
+                        key = p.key if (p and p.accepted and state.contact.calibrated and state.contact.valid
+                                        and state.contact.active and state.contact.stable
                                         and state.status in ('preview','recognized')) else None
+                        if key in ZODIAC_BY_KEY and state.status == 'preview':
+                            confidence = p.confidence
+                            if not math.isfinite(confidence) or confidence < self.recognition_confidence_threshold:
+                                self.message = (f'置信度不足：{ZODIAC_BY_KEY[key].glyph} {confidence:.0%}，'
+                                                f'需达到 {self.recognition_confidence_threshold:.0%}；保持接触继续识别')
+                                key = None
                         if key not in ZODIAC_BY_KEY:
-                            candidate = None
-                        elif key != candidate:
-                            candidate, since = key, ts
-                        elif ts-since >= .8:
-                            return key, state
+                            candidate, count = None, 0
+                        else:
+                            if key != candidate:
+                                candidate, since, count = key, ts, 1
+                            else:
+                                count += 1
+                            self.message = f'正在确认{ZODIAC_BY_KEY[key].glyph}：连续 {count} 帧'
+                            confirmed = (state.status == 'recognized' or
+                                         (count >= PREVIEW_CONFIRM_FRAMES
+                                          and ts-since >= PREVIEW_CONFIRM_SECONDS-1e-9))
+                            if confirmed:
+                                LOGGER.info('触觉结果确认：cycle=%s, key=%s, mode=%s, '
+                                            '置信度=%.1f%%, 到位后耗时=%.3f 秒, 确认帧=%s', self.cycle_id,
+                                            key, state.status, 100*p.confidence,
+                                            time.monotonic()-self.recognition_start, count)
+                                return key, state
             await asyncio.sleep(.05)
+        LOGGER.info('触觉识别超时：cycle=%s, %s', self.cycle_id, self.message)
         return None, None
 
     async def _release(self, stream_id):

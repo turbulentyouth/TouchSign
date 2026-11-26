@@ -12,7 +12,7 @@ import numpy as np
 from core.config import Config, resolve_path
 from core.contact import ContactDetector, ContactResult, make_difference
 from core.inference import RAW_INPUT_KIND, ModelPrediction, OnnxClassifier
-from core.rejection import TemporalConfirmation
+from core.rejection import PreviewConfirmation, TemporalConfirmation
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +31,7 @@ class RecognitionEngine:
         self._lock = threading.RLock()
         self.detector = ContactDetector(self.config.contact)
         self.confirmation = TemporalConfirmation(self.config.recognition.confirmation_frames)
+        self.preview_confirmation = PreviewConfirmation(self.config.recognition.max_frame_age)
         self.model_path = resolve_path(self.config.recognition.model_path)
         self.preview = self.config.recognition.preview
         self.model: OnnxClassifier | None = None
@@ -58,6 +59,8 @@ class RecognitionEngine:
                     manifest = resolve_path(configured.manifest_path)
                 self.model = OnnxClassifier(self.model_path, manifest, preview=self.preview)
                 mode = '模型预览 · 未启用拒识' if self.preview else 'ONNX 就绪'
+                if self.preview and configured.confirm_preview:
+                    mode = f'人工测试预览 · {configured.confidence_threshold:.0%} 门槛 · 未启用完整拒识'
                 self.model_status = f'{mode} · {self.model_path.name}'
             except Exception as exc:
                 self.model_status = f'模型未就绪：{exc}'
@@ -71,6 +74,7 @@ class RecognitionEngine:
             else:
                 self.detector.clear_temporal()
             self.confirmation.reset()
+            self.preview_confirmation.reset()
             self._last_sequence = None
             self._last_timestamp = None
             self._record_id = ''
@@ -86,6 +90,8 @@ class RecognitionEngine:
 
     def _set(self, status: str, message: str, contact: ContactResult | None = None,
              prediction: ModelPrediction | None = None, new_record: bool = False) -> RecognitionState:
+        if status not in ('preview', 'confirming'):
+            self.preview_confirmation.reset()
         self.state = RecognitionState(status, message, contact or ContactResult(), prediction, new_record,
                                       self._record_id if status == 'recognized' else '')
         return self.state
@@ -108,6 +114,7 @@ class RecognitionEngine:
                 self._stream_id = stream_id
             if self._last_timestamp is not None and (timestamp <= self._last_timestamp or timestamp-self._last_timestamp > self.config.recognition.max_frame_age):
                 self.confirmation.reset()
+                self.preview_confirmation.reset()
                 self.detector.clear_temporal()
             self._last_sequence, self._last_timestamp = sequence, timestamp
             contact = self.detector.process(frame, timestamp)
@@ -138,6 +145,18 @@ class RecognitionEngine:
                 self.confirmation.reset()
                 return self._set('error', f'推理失败：{exc}', contact)
             if self.preview:
+                if self.config.recognition.confirm_preview:
+                    threshold = self.config.recognition.confidence_threshold
+                    accepted = prediction.accepted and prediction.confidence >= threshold
+                    confirmed = self.preview_confirmation.update(prediction.key, accepted, timestamp)
+                    if prediction.accepted and not accepted:
+                        return self._set('unknown',
+                                         f'置信度不足：{prediction.confidence:.0%}，需达到 {threshold:.0%}；保持接触继续识别',
+                                         contact, prediction)
+                    if accepted and not confirmed:
+                        return self._set('confirming',
+                                         f'连续确认 {self.preview_confirmation.count}/{self.preview_confirmation.required}',
+                                         contact, prediction)
                 message = {'unknown': '模型首选未知物体', 'no_contact': '模型首选空载'}.get(
                     prediction.predicted_key, '显示当前帧首选生肖')
                 return self._set('preview', message, contact, prediction)

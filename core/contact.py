@@ -103,7 +103,10 @@ class ContactDetector:
         except ValueError as exc:
             self.reset()
             return ContactResult(reason=str(exc))
-        smooth = cv2.GaussianBlur(diff, (5, 5), 0).max(axis=2).astype(np.float32)
+        # OpenCV's channel-wise max preserves the exact pixels without NumPy's
+        # costly reduction over millions of three-element rows on a 1600x1200 feed.
+        b, g, r = cv2.split(cv2.GaussianBlur(diff, (5, 5), 0))
+        smooth = cv2.max(cv2.max(b, g), r).astype(np.float32)
         height, width = smooth.shape
         by = int(height * self.config.border_fraction)
         bx = int(width * self.config.border_fraction)
@@ -135,10 +138,12 @@ class ContactDetector:
             self._stable_since = None
         stable = (self._stable_count >= self.config.stable_frames and self._stable_since is not None
                   and stamp-self._stable_since >= self.config.stable_seconds)
-        ys, xs = np.nonzero(mask)
+        moments = cv2.moments(mask, binaryImage=True)
+        mass = moments['m00']
         return ContactResult(
             calibrated=True, active=True, stable=stable, score=score, area_fraction=area,
             duration_s=max(0, stamp-self._since), stability=min(1, self._stable_count/self.config.stable_frames),
-            center_x=float(xs.mean()) if xs.size else 0, center_y=float(ys.mean()) if ys.size else 0,
+            center_x=moments['m10']/mass if mass else 0,
+            center_y=moments['m01']/mass if mass else 0,
             reason='接触稳定' if stable else '接触中，请保持稳定',
         )

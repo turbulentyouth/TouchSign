@@ -333,12 +333,101 @@ class TargetGripTests(unittest.IsolatedAsyncioTestCase):
                 self.service.observe(SimpleNamespace(status='error'), started-.1, 99)
             else:
                 self.service.observe(SimpleNamespace(status='recognized',
-                    prediction=SimpleNamespace(key='rat', accepted=True),
+                    prediction=SimpleNamespace(key='rat', accepted=True, confidence=.99),
                     contact=ContactResult(active=True, stable=True, calibrated=True, valid=True)),
                     self.now, 7)
         self.on_snapshot = feed
         key, _ = await self.service._recognize(7, 'rat')
         self.assertEqual(key, 'rat')
-        self.assertGreaterEqual(self.now - started, .3 + .8)
+        # Strict mode already confirmed multiple fresh frames in the engine;
+        # do not add the former 0.8-second hold after it has done that work.
+        self.assertGreaterEqual(self.now - started, .3)
+        self.assertLess(self.now - started, .4)
         self.assertEqual(self.targets()[-1], .0035)
         self.assertEqual(self.targets().count(.0035), 1)
+
+    @staticmethod
+    def recognition_state(key='rat', *, status='preview', accepted=True, confidence=.99, **contact):
+        return SimpleNamespace(status=status,
+            prediction=SimpleNamespace(key=key, accepted=accepted, confidence=confidence),
+            contact=ContactResult(**({'calibrated': True, 'valid': True, 'active': True,
+                                      'stable': True} | contact)))
+
+    async def test_preview_confirms_fresh_frames_without_extra_point_eight_seconds(self):
+        started = self.now
+        stamps = []
+        def feed():
+            stamps.append(self.now)
+            self.service.observe(self.recognition_state(), self.now, 7)
+        self.on_snapshot = feed
+        key, state = await self.service._recognize(7, 'rat')
+        self.assertEqual(key, 'rat')
+        self.assertEqual(state.status, 'preview')
+        self.assertGreaterEqual(len(set(stamps[1:])), 3)
+        self.assertGreaterEqual(self.now-stamps[1], .15-1e-9)
+        self.assertLess(self.now-started, .3)
+        self.assertEqual(self.events, [])  # Recognition itself issues no motion.
+
+    async def test_preview_duplicate_timestamp_cannot_confirm(self):
+        self.settings.recognize_timeout = .4
+        stamp = self.now
+        self.on_snapshot = lambda: self.service.observe(
+            self.recognition_state(), stamp+.01, 7)
+        self.assertEqual(await self.service._recognize(7, 'rat'), (None, None))
+
+    async def test_preview_two_distinct_frames_are_insufficient_even_after_duration(self):
+        self.settings.recognize_timeout = .4
+        started = self.now
+        def feed():
+            stamp = started+.01 if self.now-started < .2 else started+.21
+            self.service.observe(self.recognition_state(), stamp, 7)
+        self.on_snapshot = feed
+        self.assertEqual(await self.service._recognize(7, 'rat'), (None, None))
+
+    async def test_preview_rejection_or_class_change_restarts_confirmation(self):
+        started = self.now
+        def feed():
+            tick = round((self.now-started)/.05)
+            state = self.recognition_state('ox' if tick == 3 else 'rat', accepted=tick != 4)
+            self.service.observe(state, self.now, 7)
+        self.on_snapshot = feed
+        key, _ = await self.service._recognize(7, 'rat')
+        self.assertEqual(key, 'rat')
+        self.assertAlmostEqual(self.now-started, .4, places=6)
+
+    async def test_invalid_contact_cannot_use_strict_fast_path(self):
+        for contact in ({'calibrated': False}, {'valid': False}, {'active': False}, {'stable': False}):
+            with self.subTest(contact=contact):
+                self.settings.recognize_timeout = .3
+                state = self.recognition_state(status='recognized')
+                from dataclasses import replace
+                state.contact = replace(state.contact, **contact)
+                self.on_snapshot = lambda: self.service.observe(state, self.now, 7)
+                self.assertEqual(await self.service._recognize(7, 'rat'), (None, None))
+
+    async def test_low_confidence_preview_never_becomes_a_final_result(self):
+        for confidence in (.49, .49999, float('nan')):
+            with self.subTest(confidence=confidence):
+                self.settings.recognize_timeout = .4
+                state = self.recognition_state(confidence=confidence)
+                self.on_snapshot = lambda: self.service.observe(state, self.now, 7)
+                self.assertEqual(await self.service._recognize(7, 'rat'), (None, None))
+                self.assertIn('置信度不足', self.service.message)
+                self.assertEqual(self.events, [])
+
+    async def test_fifty_percent_preview_can_confirm(self):
+        state = self.recognition_state(confidence=.5)
+        self.on_snapshot = lambda: self.service.observe(state, self.now, 7)
+        key, _ = await self.service._recognize(7, 'rat')
+        self.assertEqual(key, 'rat')
+
+    async def test_low_confidence_resets_previous_matching_frames(self):
+        started = self.now
+        def feed():
+            tick = round((self.now-started)/.05)
+            state = self.recognition_state(confidence=.49 if tick == 3 else .9)
+            self.service.observe(state, self.now, 7)
+        self.on_snapshot = feed
+        key, _ = await self.service._recognize(7, 'rat')
+        self.assertEqual(key, 'rat')
+        self.assertAlmostEqual(self.now-started, .35, places=6)

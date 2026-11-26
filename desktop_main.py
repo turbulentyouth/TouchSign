@@ -9,10 +9,11 @@ import sys
 import tempfile
 import traceback
 from contextlib import nullcontext
+from dataclasses import replace
 
 
 def _run_ui(config, args):
-    if sys.platform == 'win32':
+    if sys.platform == 'win32' and not getattr(args, 'manual', False):
         from gui.embedded import run_desktop
         run_desktop(config, self_test_report=args.self_test_report)
     else:
@@ -30,6 +31,9 @@ def _run_ui(config, args):
             guard = desktop_instance(user_data_root() / 'desktop.lock', url)
         with guard as existing:
             if existing is not None:
+                if getattr(args, 'manual', False):
+                    print('TouchSign 已在运行，请先退出当前程序，再启动人工按压测试界面。')
+                    return
                 address = existing.get('url')
                 print(f'TouchSign 已在运行：{address or "正在启动，请稍后重试"}，不再启动第二个采集进程。')
                 if address and not args.no_show:
@@ -39,12 +43,18 @@ def _run_ui(config, args):
             from gui.runtime import prepare_runtime
             prepare_runtime()
             from gui.app import run_app
-            run_app(config, native=False, show=not args.no_show, port=port)
+            options = {}
+            if getattr(args, 'manual', False):
+                from gui.manual_testing import ManualTestView
+                options['view_factory'] = ManualTestView
+            run_app(config, native=False, show=not args.no_show, port=port, **options)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='触象 · TouchSign 中文识别界面')
     parser.add_argument('--config')
+    parser.add_argument('--manual', action='store_true',
+                        help='使用原人工按压 GUI 连续测试，沿用所选配置的模型与数据处理')
     parser.add_argument('--self-test-report', help='Exercise the actual embedded GUI and exit with a JSON report')
     parser.add_argument('--diagnostics-report', help='Offline model, speech, SDK and robot-cycle check')
     parser.add_argument('--no-show', action='store_true', help='Ubuntu：仅启动本地服务，不打开浏览器')
@@ -74,6 +84,14 @@ def main(argv=None):
                           'config.yaml' if getattr(sys, 'frozen', False) else 'raw/config.yaml')
         config_path = Path(args.config) if args.config else PROJECT_ROOT / 'config' / default_config
         config = load_config(config_path)
+        if args.manual:
+            config = replace(config,
+                             app=replace(config.app, robot_controls=False,
+                                         title='触象 · TouchSign | 人工按压测试'),
+                             recognition=replace(config.recognition, confirm_preview=True))
+            logging.info('人工按压测试：model=%s, manifest=%s, preview=%s, threshold=%.0f%%',
+                         config.recognition.model_path, config.recognition.manifest_path,
+                         config.recognition.preview, 100 * config.recognition.confidence_threshold)
         _run_ui(config, args)
         if args.self_test_report:
             report = json.loads(Path(args.self_test_report).read_text(encoding='utf-8'))

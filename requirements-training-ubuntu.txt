@@ -1,0 +1,11 @@
+# Standalone Ubuntu GPU training; do not install into .venv-runtime.
+# First install torch/torchvision from https://download.pytorch.org/whl/cu128.
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+ultralytics==8.3.253
+numpy>=1.26,<3
+Pillow>=10,<13
+opencv-python>=4.10,<5
+PyYAML>=6,<7
+onnx>=1.16,<2
+onnxruntime>=1.20,<2

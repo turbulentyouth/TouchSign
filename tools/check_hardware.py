@@ -3,9 +3,17 @@ import argparse
 import json
 from pathlib import Path
 import platform
+import subprocess
 import time
 
 from robot.transport import check_socketcan
+
+
+def can_link(channel):
+    """Read controller state and counters; never change interface settings."""
+    result = subprocess.run(['ip', '-j', '-details', '-statistics', 'link', 'show', channel],
+                            capture_output=True, text=True, timeout=3, check=True)
+    return json.loads(result.stdout)[0]
 
 
 def inventory():
@@ -45,19 +53,34 @@ def main(argv=None):
     if args.can_channel:
         try:
             check_socketcan(args.can_channel)
+            # Keep passive receive usable even if iproute2 is unavailable.
+            try:
+                report['can_link_before'] = can_link(args.can_channel)
+            except (OSError, subprocess.SubprocessError, ValueError, IndexError) as exc:
+                report['can_link_warning'] = str(exc)
             import can
-            deadline = time.monotonic() + 2
             identifiers = set()
+            error_frames = {}
             count = 0
             with can.Bus(interface='socketcan', channel=args.can_channel,
                          receive_own_messages=False, ignore_config=True) as bus:
+                deadline = time.monotonic() + 2
                 while (remaining := deadline - time.monotonic()) > 0:
                     message = bus.recv(timeout=remaining)
-                    if message is not None and not message.is_error_frame:
+                    if message is not None and message.is_error_frame:
+                        key = hex(message.arbitration_id)
+                        error_frames[key] = error_frames.get(key, 0) + 1
+                    elif message is not None:
                         count += 1
                         identifiers.add(hex(message.arbitration_id))
             report['can_receive'] = {'channel': args.can_channel, 'frames': count,
-                                     'ids': sorted(identifiers)}
+                                     'ids': sorted(identifiers), 'error_frames': error_frames}
+            try:
+                report['can_link_after'] = can_link(args.can_channel)
+            except (OSError, subprocess.SubprocessError, ValueError, IndexError) as exc:
+                report['can_link_warning'] = str(exc)
+            if error_frames:
+                report['errors'].append(f'收到 CAN 错误帧：{error_frames}；接口 UP 不代表机械臂通信正常')
             if not count:
                 report['errors'].append('两秒内未收到 CAN 数据，尚不能确认机械臂在线')
         except Exception as exc:

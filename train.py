@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -21,17 +22,27 @@ ROOT = Path(__file__).resolve().parent
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='视触觉生肖 YOLO 分类训练、ONNX 导出与未知物体拒识校准')
-    parser.add_argument('--data', type=Path, default=ROOT / 'data' / 'raw', help='collect.py 生成的采集目录')
+    parser.add_argument('--data', type=Path, default=ROOT / 'data' / 'raw', help='标准采集或手工原图采集目录')
     parser.add_argument('--input', choices=('diff', 'raw'), default='diff',
                         help='训练和验证使用的图像：diff 为差分图（默认），raw 为传感器原图')
     parser.add_argument('--output', type=Path, help='新的训练输出目录（必须为空）')
     parser.add_argument('--model', default='yolo11n-cls.pt', help='YOLO 分类预训练权重；离线从零训练可用 yolo11n-cls.yaml')
     parser.add_argument('--epochs', type=int, default=80)
+    parser.add_argument('--learning-rate', type=float, default=0.001,
+                        help='AdamW 初始学习率；少量新样本续训可使用 0.0001')
+    parser.add_argument('--warmup-bias-lr', type=float, default=0.1,
+                        help='偏置参数预热学习率；小步续训可设为 0，避免预热阶段更新过大')
     parser.add_argument('--image-size', type=int, default=224)
     parser.add_argument('--batch', type=int, default=32)
     parser.add_argument('--device', default='0', help='GPU 序号，或 cpu')
     parser.add_argument('--workers', type=int, default=0, help='Windows 默认 0，避免子进程与受限系统冲突')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--manual-grouping', choices=('session', 'frame'), default='session',
+                        help='手工数据默认整会话划分；确认每张都重新按压后可用 frame，空载仍按会话分组')
+    parser.add_argument('--reference-split', type=Path,
+                        help='沿用上一轮 dataset 目录中的训练/验证分配；新增样本按完整按压划分')
+    parser.add_argument('--allow-missing-unknown', action='store_true',
+                        help='允许缺少 unknown 的原图试训；保留 14 类输出，缺少负例时不能正式发布')
     parser.add_argument('--min-per-class', type=int, default=1, help='可独立划分的类别在训练、验证两侧各需的最少图像数')
     parser.add_argument('--min-recall', type=float, default=0.8, help='每个生肖最低正确接受率，低于此值不发布')
     parser.add_argument('--max-far', type=float, default=0.0, help='留出未知/无接触负例允许误接收比例，默认零')
@@ -44,10 +55,16 @@ def parse_args(argv=None):
         parser.error('--image-size 必须是 32 的倍数，范围 32..1024')
     if min(args.epochs, args.batch, args.min_per_class) < 1 or args.workers < 0:
         parser.error('epochs、batch、min-per-class 必须为正数，workers 不能为负数')
+    if not math.isfinite(args.learning_rate) or args.learning_rate <= 0:
+        parser.error('--learning-rate 必须是有限正数')
+    if not math.isfinite(args.warmup_bias_lr) or args.warmup_bias_lr < 0:
+        parser.error('--warmup-bias-lr 必须是有限非负数')
     if not 0 < args.min_recall <= 1 or not 0 <= args.max_far < 1:
         parser.error('min-recall 必须在 (0,1]，max-far 必须在 [0,1)')
-    if args.smoke and (args.deploy or args.export_only):
-        parser.error('合成烟测不能发布到 GUI，也不能与 export-only 混用')
+    if args.smoke and (args.deploy or args.export_only or args.reference_split):
+        parser.error('合成烟测不能发布到 GUI，也不能与 export-only/reference-split 混用')
+    if args.allow_missing_unknown and args.input != 'raw':
+        parser.error('--allow-missing-unknown 仅支持 --input raw')
     return args
 
 
@@ -189,7 +206,10 @@ def main(argv=None) -> int:
                 if recorded_kind != input_kind:
                     raise ValueError('导出时的 --input 必须与该权重训练时的图像类型一致')
     split, split_report = prepare_dataset(args.data, output / 'dataset', seed=args.seed,
-                                          min_per_class=args.min_per_class, input_kind=input_kind)
+                                          min_per_class=args.min_per_class, input_kind=input_kind,
+                                          manual_grouping=args.manual_grouping,
+                                          allow_missing_unknown=args.allow_missing_unknown,
+                                          reference_split=args.reference_split)
     print(json.dumps(split_report, ensure_ascii=False, indent=2), flush=True)
     if args.prepare_only:
         print(f'数据分割完成：{output / "dataset"}')
@@ -198,7 +218,7 @@ def main(argv=None) -> int:
     import ultralytics
     from ultralytics import YOLO, settings
     from training.yolo import TactileTrainer
-    from training.calibrate import calibrate, passes_release
+    from training.calibrate import calibrate, evaluate_top1, passes_release
     settings.update({'sync': False, 'wandb': False, 'mlflow': False, 'tensorboard': False})
     if args.device != 'cpu' and not torch.cuda.is_available():
         raise ValueError('当前 CUDA 不可用；可使用 --device cpu 或安装匹配显卡的训练环境')
@@ -207,7 +227,8 @@ def main(argv=None) -> int:
         yolo.train(trainer=TactileTrainer, data=str(output / 'dataset'), epochs=args.epochs,
                    imgsz=args.image_size, batch=args.batch, device=args.device, workers=args.workers,
                    seed=args.seed, deterministic=True, project=str(output), name='fit', exist_ok=False,
-                   patience=15, optimizer='AdamW', lr0=0.001, pretrained=not args.model.endswith('.yaml'),
+                   patience=15, optimizer='AdamW', lr0=args.learning_rate,
+                   warmup_bias_lr=args.warmup_bias_lr, pretrained=not args.model.endswith('.yaml'),
                    plots=False, cache=False, save=True, val=True, verbose=False,
                    auto_augment=None, erasing=0, fliplr=0, flipud=0)
         weights = Path(yolo.trainer.best)
@@ -224,8 +245,10 @@ def main(argv=None) -> int:
                 'limitation': 'The same validation split selects weights and rejection thresholds and supplies the reported metrics.'}
     train_features = extract_features(session, split['train'], args.image_size)
     val_features = extract_features(session, split['val'], args.image_size)
+    classification = evaluate_top1(val_features)
     manifest, validation = calibrate(train_features, val_features, manifest, max_far=args.max_far)
     manifest['validation'] = validation
+    manifest['classification'] = classification
     release = (not manifest['synthetic']
                and passes_release(validation, min_recall=args.min_recall, max_far=args.max_far))
     if release:
@@ -235,7 +258,7 @@ def main(argv=None) -> int:
     report = {'output': str(output), 'status': manifest['status'], 'synthetic': manifest['synthetic'],
               'input_kind': input_kind,
               'evaluation_scope': manifest['evaluation_scope'], 'split_report': split_report,
-              'onnx_parity': parity, 'validation': validation,
+              'onnx_parity': parity, 'validation': validation, 'classification': classification,
               'deployed': bool(args.deploy and release)}
     if validation['missing_classes']:
         print('验证集缺少独立样本的类别：' + ', '.join(validation['missing_classes']) + '。模型已导出，可使用 GUI 预览模式。')
@@ -246,6 +269,7 @@ def main(argv=None) -> int:
         print('未通过发布门槛，保留当前 GUI 权重。请查看 report.json 并补采独立真实数据。')
     (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({'output': str(output), 'weights': str(weights), 'status': manifest['status'],
+                      'validation_top1_accuracy': classification['accuracy'],
                       'onnx_parity': parity, 'validation_far': validation['false_accept_rate'],
                       'validation_correct_accept_rate': validation['correct_accept_rate']}, ensure_ascii=False, indent=2))
     return 2 if args.deploy and not release else 0

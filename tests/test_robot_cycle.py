@@ -57,6 +57,7 @@ class CycleTests(unittest.IsolatedAsyncioTestCase):
         await task
         self.assertEqual(self.s.phase, 'complete')
         self.assertEqual(self.s.completed, 1)
+
         self.assertEqual(len(reports), 1)
         self.assertEqual(reports[0], ('rat',None,True))
         events = self.s.arm.events
@@ -64,6 +65,13 @@ class CycleTests(unittest.IsolatedAsyncioTestCase):
                                   ('gripper',.06),('move',(0.,)*7)])
         await asyncio.sleep(.2)
         self.assertEqual(self.s.completed, 1)
+
+    async def test_invalid_confidence_threshold_cannot_start_motion(self):
+        for threshold in (0, -1, 1.01, float('nan'), float('inf')):
+            with self.subTest(threshold=threshold), self.assertRaisesRegex(ValueError, '置信度'):
+                self.s.start(self.owner, ready=True, confidence_threshold=threshold)
+        self.assertFalse(self.s.busy)
+        self.assertEqual(self.s.arm.events, [])
 
     async def test_initial_brake_does_not_latch_fault_and_teaching_can_enable(self):
         arm = self.s.arm

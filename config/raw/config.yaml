@@ -5,5 +5,7 @@ app:
   native: false
   show: true
 recognition:
+  confidence_threshold: 0.50
   model_path: "models/raw/best.onnx"
+  manifest_path: "models/raw/best.json"
   preview: true

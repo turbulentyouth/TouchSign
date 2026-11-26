@@ -1,0 +1,53 @@
+{
+  "source_run": "corrections_final_raw_20261126_121349",
+  "created_utc": "2026-11-26T04:16:06.454397+00:00",
+  "status": "unvalidated",
+  "input_kind": "raw_bgr_v1",
+  "image_size": 224,
+  "confidence_threshold": 0.5,
+  "files": {
+    "best.onnx": "b5121289246aab555a833e905d78da3dcad4add381e7c2ee054e9192e0f7f529",
+    "best.json": "9c5ed7ff925646e5b2113a26918efa8160f2b0d3f0ab909a814d95cac8d8a8a9",
+    "best.pt": "3a21855369a90ff8000feb1cdf9eb648d57d02aa71346c836a26a507bae6f3c8"
+  },
+  "training": {
+    "previous_training": 319,
+    "corrections_training": 15,
+    "original_validation": 89,
+    "diagnostic_learning_rate": 0.0001,
+    "final_learning_rate": 5e-05
+  },
+  "offline_comparison": {
+    "previous_train": {
+      "count": 319,
+      "previous_correct_at_50_percent": 319,
+      "new_correct_at_50_percent": 319
+    },
+    "previous_val": {
+      "count": 89,
+      "previous_correct_at_50_percent": 89,
+      "new_correct_at_50_percent": 89
+    },
+    "all_corrections": {
+      "count": 15,
+      "previous_correct_at_50_percent": 0,
+      "new_correct_at_50_percent": 15
+    },
+    "external_rooster": {
+      "count": 13,
+      "previous_correct_at_50_percent": 13,
+      "new_correct_at_50_percent": 13
+    },
+    "no_contact_replay": {
+      "count": 5,
+      "previous_correct_at_50_percent": 5,
+      "new_correct_at_50_percent": 5
+    }
+  },
+  "limitations": [
+    "All 15 correction images participated in final training; their results are fit checks, not held-out accuracy.",
+    "Original validation selects the checkpoint; it is not an untouched test set.",
+    "Unknown and independent no_contact validation are missing; preview mode is required.",
+    "Offline saved-image evaluation; new live presses and Windows hardware have not been verified in this release."
+  ]
+}

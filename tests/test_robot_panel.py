@@ -16,6 +16,27 @@ from robot.service import RobotService
 
 
 class RobotPanelTests(unittest.TestCase):
+    def test_detection_passes_configured_fifty_percent_threshold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = RobotService(RobotSettings(), SettingsStore(Path(directory)/'config.yaml'))
+            self.addCleanup(service.pool.shutdown, wait=True)
+            config = Config()
+            config = replace(config, app=replace(config.app, robot_controls=True),
+                             recognition=replace(config.recognition, confidence_threshold=.5))
+            with patch('gui.app.ui.timer'), patch('gui.app.camera_manager') as cameras, \
+                    patch('gui.robot_panel._service', service), \
+                    patch('gui.robot_panel.camera_manager.frame_packet', return_value=None), \
+                    patch.object(service, 'start') as start:
+                cameras.cameras = []
+                view = TouchSignView(config)
+                coroutine = view.robot_panel.detect()
+                try:
+                    with self.assertRaises(StopIteration):
+                        coroutine.send(None)
+                finally:
+                    coroutine.close()
+                self.assertEqual(start.call_args.kwargs['confidence_threshold'], .5)
+
     def test_tactile_processing_starts_only_after_jaw_arrival(self):
         async def immediate_io(function, *args, **kwargs):
             return function(*args, **kwargs)

@@ -9,6 +9,23 @@ from core.inference import CLASS_NAMES, decide
 from core.zodiac import ZODIAC_KEYS
 
 
+def evaluate_top1(samples: list[dict]) -> dict:
+    """Preview-mode accuracy, separate from confidence/embedding rejection."""
+    counts = {key: {'count': 0, 'correct': 0} for key in CLASS_NAMES}
+    confusion = {key: {} for key in CLASS_NAMES}
+    for sample in samples:
+        label = sample['label']
+        predicted = CLASS_NAMES[int(np.argmax(sample['probabilities']))]
+        counts[label]['count'] += 1
+        counts[label]['correct'] += int(predicted == label)
+        confusion[label][predicted] = confusion[label].get(predicted, 0) + 1
+    total = len(samples)
+    correct = sum(row['correct'] for row in counts.values())
+    return {'total': total, 'correct': correct, 'accuracy': correct / total if total else None,
+            'counts': counts, 'confusion': confusion,
+            'missing_classes': [key for key, row in counts.items() if row['count'] == 0]}
+
+
 def fit_prototypes(train: list[dict]) -> tuple[dict, dict]:
     prototypes, distances = {}, {}
     for key in ZODIAC_KEYS:

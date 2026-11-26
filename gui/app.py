@@ -48,9 +48,10 @@ async def _mjpeg_stream():
 
 
 class TouchSignView:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, *, engine=None, robot_panel_factory=None,
+                 result_panel_factory=None) -> None:
         self.config = config
-        self.engine = RecognitionEngine(config)
+        self.engine = engine if engine is not None else RecognitionEngine(config)
         self.speech = SpeechGate(config.recognition.max_frame_age)
         self.speech_enabled = True
         self.speech_testing = False
@@ -86,11 +87,11 @@ class TouchSignView:
                 from gui.robot_panel import RobotPanel
                 self.robot_settings = element('div', 'robot-settings')
                 with self.robot_settings:
-                    self.robot_panel = RobotPanel(self)
+                    self.robot_panel = (robot_panel_factory or RobotPanel)(self)
                 self.robot_settings.set_visibility(False)
             with element('main', 'workspace'):
                 self.sensor = SensorPanel(config.sensor, PLACEHOLDER_URL, self.contact)
-                self.result = ResultPanel(config.recognition.confidence_threshold,
+                self.result = (result_panel_factory or ResultPanel)(config.recognition.confidence_threshold,
                                           None, self.records, 0.0)
             self.matrix = ZodiacMatrix('')
             self.footer = AppFooter()
@@ -103,7 +104,7 @@ class TouchSignView:
         self._clear_result('请移开物体，完成空载校准后开始识别', '待校准')
         self.topbar.set_status('请先进行空载校准', 'CALIBRATION REQUIRED')
         ui.timer(1.0, lambda: self.topbar.set_clock(datetime.now()))
-        ui.timer(0.1, self._tick)
+        ui.timer(0.05, self._tick)
         ui.context.client.on_disconnect(self._on_disconnect)
         if cached is not None:
             self._activate_camera(cached)
@@ -269,6 +270,7 @@ class TouchSignView:
             if self.robot_panel is not None:
                 self.robot_panel.service.observe(state, packet.timestamp, packet.serial)
             self._render_state(state)
+            self._on_processed_frame(packet, state)
             self._announce(state, packet.timestamp)
         except Exception as exc:
             LOGGER.exception('实时识别失败')
@@ -276,6 +278,9 @@ class TouchSignView:
             self.topbar.set_status('识别异常', 'ERROR')
         finally:
             self.analyzing = False
+
+    def _on_processed_frame(self, packet, state) -> None:
+        """Optional consumer of the exact frame/prediction pair shown by this tick."""
 
     def _render_preview(self, frame) -> None:
         if not self.difference_preview:
@@ -584,7 +589,7 @@ async def _shutdown_devices(robot_controls: bool) -> None:
         camera_manager.close()
 
 
-def register_pages(config: Config) -> None:
+def register_pages(config: Config, *, view_factory=None) -> None:
     async def shutdown_devices():
         await _shutdown_devices(config.app.robot_controls)
 
@@ -615,12 +620,16 @@ def register_pages(config: Config) -> None:
              dark=True)
     def index() -> None:
         apply_theme()
-        TouchSignView(config)
+        (view_factory or TouchSignView)(config)
 
 
 def run_app(config: Config, *, host: str | None = None, port: int | None = None,
-            show: bool | None = None, reload: bool | None = None, native: bool | None = None) -> None:
-    register_pages(config)
+            show: bool | None = None, reload: bool | None = None, native: bool | None = None,
+            view_factory=None) -> None:
+    if view_factory is None:
+        register_pages(config)
+    else:
+        register_pages(config, view_factory=view_factory)
     favicon = config.favicon_path
     use_native = config.app.native if native is None else native
     # Native windows use an available local port unless the caller supplies one.

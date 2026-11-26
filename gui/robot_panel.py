@@ -10,7 +10,7 @@ from robot.service import RobotService
 _service = None
 
 
-def get_service():
+def get_service(service_factory=RobotService):
     global _service
     if _service is None:
         store = SettingsStore()
@@ -23,7 +23,7 @@ def get_service():
         # A fresh application always starts in offline mode, even if hardware
         # was selected last time. Each connection is deliberate.
         settings.backend = 'mock'
-        _service = RobotService(settings, store)
+        _service = service_factory(settings, store)
     return _service
 
 
@@ -37,9 +37,9 @@ async def shutdown_robot():
 
 
 class RobotPanel:
-    def __init__(self, view):
+    def __init__(self, view, *, service_factory=RobotService):
         self.view = view
-        self.service = get_service()
+        self.service = get_service(service_factory)
         self.result_latched = False
         self.action_busy = False
         self.detect_button = view.detect_button
@@ -169,7 +169,8 @@ class RobotPanel:
                     ui.run_javascript(f'queueRecognitionSpeech(getHtmlElement({v.audio.id}), {source})')
         self.service.start(self, ready=bool(ready), stream_id=v._stream_serial,
                            mock_key=self.mock_key.value, on_result=report,
-                           ready_check=lambda: self.sensor_ready())
+                           ready_check=lambda: self.sensor_ready(),
+                           confidence_threshold=v.config.recognition.confidence_threshold)
         self.result_latched = False
         v.speech.reset()
         v._clear_result('本轮检测运行中', '检测中')

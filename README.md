@@ -1,3 +1,11 @@
+> Windows 采集/训练/识别代码调研：沿用 NERO，采集采用人工按压快速采集，规划无需填写参数的一键训练；不涉及环境安装。现有兼容性缺口、需新增的入口及验收见 [Windows 三流程方案](docs/windows-workflows.md)。
+
+> 人工按压识别测试（无需机械臂）：运行 `bash tools/start_manual_test_ubuntu.sh`，使用原连续识别 GUI，沿用当前 Ubuntu 配置的最新模型、图像处理和 50% 确认门槛。发现误判时点击“保存纠错样本”，冻结图像并选择正确生肖，保存到 `data/corrections/` 供后续训练。详见 [Ubuntu 人工测试说明](docs/ubuntu.md#人工按压识别测试)。
+
+> 手工快速采集（无需机械臂）：运行 `bash tools/start_manual_collect_ubuntu.sh`，选标签、手工按压、空格保存 180° 图像。支持 R 连拍、Esc 停止。详见 [手工采集说明](docs/manual-collection.md)。
+
+> 数据采集（Ubuntu）：运行 `bash tools/start_collect_ubuntu.sh`，在现有 GUI 中选择人工标签，沿用机械臂动作采样。原识别启动命令不变。详见 [采集与标注流程](docs/collection-gui.md)。
+
 > Ubuntu 24.04：运行 `bash tools/setup_ubuntu.sh` 安装，再用 `bash tools/start_ubuntu.sh` 启动中文界面。支持 SocketCAN 和 VBTS 传感器，详见 [Ubuntu 运行与本机硬件验证](docs/ubuntu.md)。
 
 > 当前独立内嵌网页桌面版：本机运行 dist/TouchSign-Desktop.lnk。最终 EXE 被 Windows 应用控制拦截，运行验收未通过。没有外部浏览器或本地 HTTP 服务。构建使用 tools/build_desktop.ps1，详见 [桌面版说明](docs/embedded-desktop.md)。旧浏览器方案保留用于历史参考。
@@ -20,7 +28,7 @@
 
 界面默认开启「语音播报」，点击可静音。预览模式下，首选生肖连续稳定 0.8 秒后播放对应的普通话字名及生肖介绍、祝福语。正式识别在生成新识别记录时播报。同一次按压不重复播报相同生肖；新的生肖通过稳定判定后会立即替换当前播报。连续移开至少 0.5 秒后，相同生肖可再次播报。十二段音频采用指定 WAIC 十二生肖 demo 的角色化录音，开头保留报字，随后播放完整介绍和祝福语；录音随程序提供，可离线使用。播报文案与来源见 `assets/speech/manifest.json`。
 
-本版内置 `models/raw/best.onnx`，来自 `raw_20261031_155549_285715` 训练批次，输入格式为 `raw_bgr_v1`。保留了原始的 `unvalidated` 状态，界面采用「模型预览」，直接显示首选类别并跳过拒识阈值。该批次验证集缺少空载样本，使用原有拒识阈值时生肖正确接受率为 62.9%。仍需补采独立数据以验证正式识别表现。
+当前源码及后续构建使用 `models/raw/best.onnx`，来自 `corrections_final_raw_20261126_121349` 训练批次，输入格式为 `raw_bgr_v1`，配套清单与续训权重也已更新。原验证集 89/89、额外鸡图 13/13 保持正确；15 张纠错训练图回放全部正确，不能作为独立验证成绩。模型保持 `unvalidated` 预览状态，人工测试及机械臂最终确认采用 50% 门槛。文件哈希与评估边界见 [发布摘要](models/raw/release.json)。此前生成的 EXE 不会自动更新内置权重，需重新构建并在 Windows 验收。
 
 GitHub 仓库包含代码、训练权重 `models/raw/best.pt`、推理权重 `best.onnx` 和配套 `best.json`。原始采集图像保留在本机。
 

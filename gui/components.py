@@ -92,7 +92,7 @@ class TopBar:
                     with element('div', 'brand-title'):
                         Text('h1', '触象')
                         Text('span', 'TOUCHSIGN', 'brand-english')
-                    markup(
+                    self.subtitle = markup(
                         'p',
                         '视触觉生肖识别系统 <span class="micro-separator">/</span> '
                         'TACTILE ZODIAC RECOGNITION',
@@ -755,8 +755,8 @@ class ZodiacMatrix:
                 with element('div', 'zodiac-legend'):
                     with element('span', 'legend-active'):
                         element('i')
-                        Text('span', '感应高亮')
-                    Text('span', '根据识别结果自动高亮', 'legend-muted')
+                        self.legend = Text('span', '感应高亮')
+                    self.legend_hint = Text('span', '根据识别结果自动高亮', 'legend-muted')
 
             with element('div', 'zodiac-row'):
 
@@ -795,4 +795,4 @@ class AppFooter:
             element('span', 'footer-rule').props('aria-hidden="true"')
             Text('span', '观象于触，识形于微', 'footer-motto')
             element('span', 'footer-rule footer-rule--right').props('aria-hidden="true"')
-            Text('span', 'TACTILE INTELLIGENCE · ONNX CPU', 'footer-system')
+            self.system = Text('span', 'TACTILE INTELLIGENCE · ONNX CPU', 'footer-system')

@@ -65,7 +65,8 @@ class CollectionController:
             self.saved_run = 0
             self.message = '核对当前类别与实物，按空格保存一张。'
 
-    def start(self, *, confirmed: bool, target: int, interval: float, max_per_episode: int) -> None:
+    def start(self, *, confirmed: bool, target: int, interval: float, max_per_episode: int,
+              new_episode: bool = False) -> None:
         with self.lock:
             if self.calibrating or self.detector.baseline is None:
                 raise ValueError('请先完成空载校准')
@@ -77,6 +78,17 @@ class CollectionController:
                 raise ValueError('传感器没有新鲜图像，不能开始采集')
             if target < 1 or interval < 0.1 or max_per_episode < 1:
                 raise ValueError('目标张数、间隔和每次接触上限无效')
+            if new_episode:
+                # A robot cycle has opened/repositioned/closed since the last
+                # observation. Require fresh stability and a new grouping ID.
+                self.detector.clear_temporal()
+                self.contact = None
+                self._last_token = self._sample = None
+                self._episode_id = uuid.uuid4().hex
+                self._episode_count = 0
+                self._episode_label = None
+                self._was_active = False
+                self._last_thumbnail = self._last_image_hash = None
             self.target, self.interval, self.max_per_episode = target, interval, max_per_episode
             self.saved_run = 0
             self.recording = True
@@ -163,6 +175,11 @@ class CollectionController:
             difference = self._sample[1] if self._sample is not None else None
             return self._raw_frame, difference
 
+    def poll_packet(self, packet: FramePacket) -> None:
+        """Observe/save exactly this frame, so robot feedback matches its timestamp."""
+        with self.lock:
+            self._process_latest(manual=False, packet=packet)
+
     def capture_once(self, *, expected_label: str | None = None) -> bool:
         """Save this keypress's current eligible frame or decline immediately."""
         with self.lock:
@@ -178,7 +195,7 @@ class CollectionController:
         self.message = message
         return False
 
-    def _process_latest(self, *, manual: bool) -> bool:
+    def _process_latest(self, *, manual: bool, packet: FramePacket | None = None) -> bool:
         self._raw_frame = None
         if self.calibrating:
             if manual:
@@ -190,7 +207,7 @@ class CollectionController:
                 self.invalidate('设备已断开，请重新连接并校准。')
             return False
         try:
-            packet = stream.frame_packet()
+            packet = stream.frame_packet() if packet is None else packet
             if packet is None or not -0.1 <= time.monotonic() - packet.timestamp <= 0.5:
                 if manual or self.recording or self.detector.baseline is not None:
                     self.invalidate('没有新鲜传感器图像，请检查连接并重新校准。')
@@ -200,7 +217,8 @@ class CollectionController:
                 if manual:
                     self.message = '请先移开物体并完成空载校准。'
                 return False
-            if packet.serial != self._selected_serial or self.camera.stream is not stream:
+            if (packet.serial != self._selected_serial or packet.serial != stream.serial
+                    or self.camera.stream is not stream):
                 self.invalidate('传感器已切换，请重新进行空载校准。')
                 return False
             token = (packet.serial, packet.sequence)
