@@ -21,6 +21,7 @@ def _chinese_font(requested: Path | str | None) -> Path:
     else:
         windows_fonts = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts'
         candidates = [
+            Path(__file__).resolve().parent.parent / 'assets/fonts/NotoSansCJK-Regular.ttc',
             windows_fonts / 'msyh.ttc', windows_fonts / 'NotoSansSC-VF.ttf',
             windows_fonts / 'simhei.ttf', windows_fonts / 'simsun.ttc',
             Path('/System/Library/Fonts/PingFang.ttc'),

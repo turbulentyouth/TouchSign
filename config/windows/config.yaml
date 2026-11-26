@@ -1,0 +1,15 @@
+app:
+  robot_controls: false
+  title: "触象 · TouchSign | 人工按压测试"
+  native: false
+  show: true
+  host: "127.0.0.1"
+sensor:
+  preferred_camera_name: ""
+  scan_max_index: 6
+recognition:
+  confidence_threshold: 0.50
+  model_path: "models/raw/best.onnx"
+  manifest_path: "models/raw/best.json"
+  preview: true
+  confirm_preview: true

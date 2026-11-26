@@ -57,6 +57,11 @@ def read_samples(root: str | Path, *, input_kind: str = INPUT_KIND,
         raise ValueError('manual_grouping 必须为 session 或 frame')
     image_field = 'raw_image' if input_kind == RAW_INPUT_KIND else 'image'
     root = Path(root).resolve()
+    if (root / 'snapshot.json').is_file():
+        if input_kind != RAW_INPUT_KIND:
+            raise ValueError('便携原图快照只能用于原图训练')
+        from training.portable import load_snapshot
+        return load_snapshot(root)
     manifests = sorted([*root.glob('*/manifest.jsonl'), *root.glob('*/samples.jsonl')])
     if not manifests:
         raise ValueError(f'没有采集数据：{root}。请先采集十二生肖、未知物体和无接触数据。')
@@ -292,13 +297,14 @@ def prepare_dataset(raw: str | Path, destination: str | Path, *, seed: int = 42,
     if allow_missing_unknown and input_kind != RAW_INPUT_KIND:
         raise ValueError('缺少 unknown 的试训仅支持原图模式')
     samples = read_samples(raw, input_kind=input_kind, manual_grouping=manual_grouping)
-    split, grouping = _grouped_split(samples, seed=seed, min_per_class=min_per_class,
-                                     allow_missing_unknown=allow_missing_unknown)
     reference_details = None
     if reference_split is not None:
         split, reference_details = _reference_split(samples, Path(reference_split), seed=seed,
                                                     min_per_class=min_per_class, input_kind=input_kind)
         grouping = 'reference+episode'
+    else:
+        split, grouping = _grouped_split(samples, seed=seed, min_per_class=min_per_class,
+                                         allow_missing_unknown=allow_missing_unknown)
     report = {'seed': seed, 'grouping': grouping, 'input_kind': input_kind,
               'manual_grouping': manual_grouping if any(s.get('format') == MANUAL_FORMAT for s in samples) else None,
               'missing_training_classes': sorted(set(CLASS_NAMES) - {s['label'] for s in split['train']}),

@@ -25,7 +25,7 @@ def _run_ui(config, args):
         browser_host = config.app.host if config.app.host != '0.0.0.0' else '127.0.0.1'
         url = f'http://{browser_host}:{port}/'
         guard = nullcontext(None)
-        if sys.platform == 'linux':
+        if sys.platform in ('linux', 'win32'):
             from core.instance import desktop_instance
             from core.paths import user_data_root
             guard = desktop_instance(user_data_root() / 'desktop.lock', url)

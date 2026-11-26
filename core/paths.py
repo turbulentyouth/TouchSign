@@ -5,6 +5,8 @@ import sys
 
 
 def user_data_root():
+    if os.environ.get('TOUCHSIGN_PORTABLE') == '1':
+        return Path(__file__).resolve().parent.parent / 'data' / 'app'
     if sys.platform == 'linux':
         configured = os.environ.get('XDG_DATA_HOME', '')
         base = Path(configured) if configured and Path(configured).is_absolute() else Path.home() / '.local' / 'share'

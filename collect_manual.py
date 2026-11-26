@@ -24,7 +24,8 @@ LABEL_KEYS = {ord(shortcut.lower()): label for label, shortcut in LABEL_SHORTCUT
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='手工快速采集：选标签、手工按压、空格保存 180° 图像。')
-    parser.add_argument('--config', type=Path, default=PROJECT_ROOT / 'config/ubuntu/config.yaml')
+    profile = 'windows' if sys.platform == 'win32' else 'ubuntu'
+    parser.add_argument('--config', type=Path, default=PROJECT_ROOT / f'config/{profile}/config.yaml')
     parser.add_argument('--camera', type=int, help='指定相机编号；默认自动查找配置中的 VBTS 传感器')
     parser.add_argument('--label', choices=DATASET_LABELS, help='启动时选好标签，也可在窗口中按键选类')
     parser.add_argument('--output', type=Path, default=PROJECT_ROOT / 'data/manual', help='保存目录')
@@ -74,6 +75,39 @@ def run_window(camera: CameraManager, collector: ManualCollector, canvas: Manual
         cv2.destroyAllWindows()
 
 
+def choose_windows_camera(camera, cameras, canvas, fps):
+    """Confirm the sensor visually instead of silently using a laptop webcam."""
+    available = [item for item in cameras if item.available]
+    if not available:
+        raise RuntimeError('未找到摄像头，请插好 USB 传感器、关闭占用相机的软件后重试。')
+    index = 0
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.resizeWindow(WINDOW_NAME, *canvas.size)
+    try:
+        while True:
+            selected = available[index]
+            stream = camera.select(selected, target_fps=fps, encode_jpeg=False)
+            ready = stream.wait_ready()
+            while True:
+                packet = camera.frame_packet()
+                frame = packet.frame if packet is not None else None
+                cv2.imshow(WINDOW_NAME, canvas.render_manual(
+                    frame, label=None, total=0, class_count=0, recording=False, pending=0,
+                    message=('确认这是触觉传感器：Enter 使用，Tab 换相机，Q 退出。' if ready else
+                             '相机打开失败：Tab 换相机，Q 退出。') + f'  {index + 1}/{len(available)}',
+                    camera_index=selected.index))
+                key = cv2.waitKeyEx(30)
+                if key in (ord('q'), ord('Q'), 27) or cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                    return None
+                if key in (10, 13) and ready:
+                    return selected
+                if key == 9:
+                    index = (index + 1) % len(available)
+                    break
+    finally:
+        cv2.destroyAllWindows()
+
+
 def main(argv=None):
     args = parse_args(argv)
     if not args.list_cameras and sys.platform == 'linux' and not (
@@ -96,7 +130,12 @@ def main(argv=None):
             if args.camera is None:
                 cameras = camera.scan(max_index=config.sensor.scan_max_index,
                                       name_filter=config.sensor.preferred_camera_name)
-                selected = preferred_camera(cameras, config.sensor.preferred_camera_name)
+                if sys.platform == 'win32':
+                    selected = choose_windows_camera(camera, cameras, canvas, config.sensor.capture_fps)
+                    if selected is None:
+                        return 0
+                else:
+                    selected = preferred_camera(cameras, config.sensor.preferred_camera_name)
                 if selected is None:
                     raise RuntimeError('未找到可用传感器。使用 --list-cameras 查看设备，或 --camera 编号 指定。\n'
                                        + describe_cameras(cameras))

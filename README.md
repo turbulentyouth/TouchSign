@@ -1,4 +1,4 @@
-> Windows 采集/训练/识别代码调研：沿用 NERO，采集采用人工按压快速采集，规划无需填写参数的一键训练；不涉及环境安装。现有兼容性缺口、需新增的入口及验收见 [Windows 三流程方案](docs/windows-workflows.md)。
+> Windows 免安装便携版：完整复制 `dist/TouchSign-Windows`，或解压同名 ZIP，即可双击“人工采集 / 一键训练 / 识别与纠错”。随包携带 Python、CPU 依赖、最新模型与旧训练/验证原图；使用步骤与验证范围见 [Windows 便携版说明](docs/windows-workflows.md)。
 
 > 人工按压识别测试（无需机械臂）：运行 `bash tools/start_manual_test_ubuntu.sh`，使用原连续识别 GUI，沿用当前 Ubuntu 配置的最新模型、图像处理和 50% 确认门槛。发现误判时点击“保存纠错样本”，冻结图像并选择正确生肖，保存到 `data/corrections/` 供后续训练。详见 [Ubuntu 人工测试说明](docs/ubuntu.md#人工按压识别测试)。
 

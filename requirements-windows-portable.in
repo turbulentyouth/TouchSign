@@ -1,0 +1,13 @@
+# Windows x64 / CPython 3.12, CPU training, local browser GUI.
+# Resolve on the build host; target computers never run pip or need CUDA.
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+ultralytics==8.3.253
+numpy==1.26.4
+scipy==1.15.3
+opencv-python==4.11.0.86
+onnx==1.18.0
+onnxruntime==1.22.1
+nicegui==2.24.2
+setuptools==80.9.0
+colorama==0.4.6

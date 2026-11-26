@@ -36,6 +36,7 @@ def parse_args(argv=None):
     parser.add_argument('--batch', type=int, default=32)
     parser.add_argument('--device', default='0', help='GPU 序号，或 cpu')
     parser.add_argument('--workers', type=int, default=0, help='Windows 默认 0，避免子进程与受限系统冲突')
+    parser.add_argument('--no-amp', action='store_true', help='关闭混合精度及其联网检查，用于离线便携训练')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--manual-grouping', choices=('session', 'frame'), default='session',
                         help='手工数据默认整会话划分；确认每张都重新按压后可用 frame，空载仍按会话分组')
@@ -230,7 +231,7 @@ def main(argv=None) -> int:
                    patience=15, optimizer='AdamW', lr0=args.learning_rate,
                    warmup_bias_lr=args.warmup_bias_lr, pretrained=not args.model.endswith('.yaml'),
                    plots=False, cache=False, save=True, val=True, verbose=False,
-                   auto_augment=None, erasing=0, fliplr=0, flipud=0)
+                   auto_augment=None, erasing=0, fliplr=0, flipud=0, amp=not args.no_amp)
         weights = Path(yolo.trainer.best)
     model_path = output / 'best.onnx'
     session, parity = export_onnx(weights, model_path, args.image_size, split['val'])
